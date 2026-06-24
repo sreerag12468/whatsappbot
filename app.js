@@ -440,7 +440,7 @@ async function connectToWhatsApp() {
     }
 }
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     addLog(`Server is running on port ${PORT}`);
     addLog(`Dashboard URL: http://localhost:${PORT}`);
