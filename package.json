@@ -4,6 +4,9 @@
   "description": "WhatsApp Bot using Baileys and Express Dashboard",
   "main": "app.js",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "start": "node app.js"
   },
