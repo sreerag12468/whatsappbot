@@ -1,0 +1,6 @@
+node_modules/
+auth_info_baileys/
+auth_info_baileys_test/
+temp_audio/
+.env
+.DS_Store

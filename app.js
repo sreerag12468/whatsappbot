@@ -219,10 +219,11 @@ app.post('/api/send', async (req, res) => {
                 }
             }
             
-            await sock.sendMessage(jid, { 
-                text, 
-                linkPreview 
-            });
+            const msgContent = { text };
+            if (linkPreview) {
+                msgContent.linkPreview = linkPreview;
+            }
+            await sock.sendMessage(jid, msgContent);
             addLog(`Text message successfully sent to: ${jid}`);
         }
 
@@ -376,20 +377,39 @@ async function connectToWhatsApp() {
                                 
                             const { text: replyText, image: replyImage, voice: replyVoice } = rule;
 
+                            const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+                            const setPresence = async (type) => {
+                                try {
+                                    await sock.sendPresenceUpdate(type, senderJid);
+                                } catch (e) {}
+                            };
+
+                            // Initial reaction delay (simulate human reading/noticing)
+                            await delay(1000);
+
                             // 1. Send image if provided
                             if (replyImage) {
+                                await setPresence('composing');
+                                await delay(2000); // Simulate upload/processing time
+                                
                                 const imgBuffer = Buffer.from(replyImage.split(',')[1] || replyImage, 'base64');
                                 await sock.sendMessage(senderJid, { 
                                     image: imgBuffer, 
                                     caption: replyVoice ? undefined : replyText 
                                 });
                                 addLog(`Auto-reply sent image to ${senderName}.`);
+                                
+                                await setPresence('paused');
+                                await delay(1500); // Small interval between messages
                             }
 
                             // 2. Send voice note if provided
                             if (replyVoice) {
+                                await setPresence('recording');
                                 addLog('Transcoding auto-reply audio to OGG/Opus...');
                                 const voiceBuffer = await convertToOggOpus(replyVoice);
+                                
+                                await delay(3500); // Simulate audio recording duration
                                 await sock.sendMessage(senderJid, { 
                                     audio: voiceBuffer, 
                                     mimetype: 'audio/ogg; codecs=opus', 
@@ -397,14 +417,27 @@ async function connectToWhatsApp() {
                                 });
                                 addLog(`Auto-reply sent voice note to ${senderName}.`);
                                 
+                                await setPresence('paused');
+                                await delay(1500); // Small interval before next message
+                                
                                 if (replyText) {
+                                    await setPresence('composing');
+                                    const typingDuration = Math.min(1500 + replyText.length * 15, 6000);
+                                    await delay(typingDuration);
+                                    
                                     await sock.sendMessage(senderJid, { text: replyText });
                                     addLog(`Auto-reply sent text message separately to ${senderName}.`);
+                                    
+                                    await setPresence('paused');
                                 }
                             }
 
                             // 3. Send text message if only text is provided (no image, no voice)
                             if (replyText && !replyImage && !replyVoice) {
+                                await setPresence('composing');
+                                const typingDuration = Math.min(1500 + replyText.length * 15, 6000);
+                                await delay(typingDuration);
+
                                 const urlRegex = /https?:\/\/[^\s]+/gi;
                                 const urls = replyText.match(urlRegex);
                                 let linkPreview = undefined;
@@ -418,11 +451,14 @@ async function connectToWhatsApp() {
                                     }
                                 }
                                 
-                                await sock.sendMessage(senderJid, { 
-                                    text: replyText, 
-                                    linkPreview 
-                                });
+                                const msgContent = { text: replyText };
+                                if (linkPreview) {
+                                    msgContent.linkPreview = linkPreview;
+                                }
+                                await sock.sendMessage(senderJid, msgContent);
                                 addLog(`Auto-reply sent text to ${senderName}.`);
+                                
+                                await setPresence('paused');
                             }
 
                             break; // Stop after first match
