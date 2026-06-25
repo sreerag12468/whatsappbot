@@ -152,6 +152,42 @@ app.get('/api/logs', (req, res) => {
     res.json(logs);
 });
 
+app.post('/api/logout', async (req, res) => {
+    try {
+        if (sock) {
+            addLog('Logging out of WhatsApp and clearing session...');
+            await sock.logout();
+            sock = null;
+        }
+        // Clear auth folder
+        const authStateDir = process.env.AUTH_DIR || path.join(__dirname, 'auth_info_baileys');
+        if (fs.existsSync(authStateDir)) {
+            fs.rmSync(authStateDir, { recursive: true, force: true });
+        }
+        connectionStatus = 'Disconnected';
+        isConnecting = false;
+        qrCodeBase64 = null;
+        io.emit('status', { status: connectionStatus });
+        io.emit('qr', { qr: null });
+        addLog('Session cleared. Reconnecting for fresh QR scan...');
+        setTimeout(() => connectToWhatsApp(), 1500);
+        res.json({ success: true, message: 'Logged out. Scan the new QR code.' });
+    } catch (err) {
+        addLog(`Logout error: ${err.message}`);
+        // Force clear even if logout() fails
+        const authStateDir = process.env.AUTH_DIR || path.join(__dirname, 'auth_info_baileys');
+        try { if (fs.existsSync(authStateDir)) fs.rmSync(authStateDir, { recursive: true, force: true }); } catch(e) {}
+        sock = null;
+        connectionStatus = 'Disconnected';
+        isConnecting = false;
+        qrCodeBase64 = null;
+        io.emit('status', { status: connectionStatus });
+        io.emit('qr', { qr: null });
+        setTimeout(() => connectToWhatsApp(), 1500);
+        res.json({ success: true, message: 'Session force-cleared. Scan the new QR code.' });
+    }
+});
+
 app.post('/api/send', async (req, res) => {
     const { number, text, image, voice } = req.body;
 
@@ -251,7 +287,8 @@ async function connectToWhatsApp() {
     if (isConnecting) return;
     isConnecting = true;
 
-    const authStateDir = path.join(__dirname, 'auth_info_baileys');
+    // Use AUTH_DIR env var for Railway persistent volume, fallback to local
+    const authStateDir = process.env.AUTH_DIR || path.join(__dirname, 'auth_info_baileys');
     const { state, saveCreds } = await useMultiFileAuthState(authStateDir);
     
     // Fetch latest WhatsApp Web version to prevent protocol mismatch errors (e.g. error code 405/411)

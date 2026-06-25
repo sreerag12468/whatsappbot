@@ -544,6 +544,17 @@
         let currentKeywords = {};
 
         // 1. Connection Status Manager
+        async function logoutAndRescan() {
+            if (!confirm('This will disconnect WhatsApp and generate a new QR code. Continue?')) return;
+            try {
+                const res = await fetch('/api/logout', { method: 'POST' });
+                const data = await res.json();
+                alert(data.message || 'Logged out. Please scan the new QR code.');
+            } catch(e) {
+                alert('Logout request failed: ' + e.message);
+            }
+        }
+
         socket.on('status', (data) => {
             const container = document.getElementById('status-container');
             const text = document.getElementById('status-text');
@@ -557,6 +568,8 @@
                     <div style="color: var(--color-connected); font-size: 40px; margin-bottom: 12px;">✓</div>
                     <div style="font-weight: 600; font-size: 16px;">WhatsApp Connected</div>
                     <div style="color: var(--text-secondary); font-size: 13px; margin-top: 4px;">Bot is active and listening for incoming messages.</div>
+                    <button onclick="logoutAndRescan()" style="margin-top:16px; padding: 10px 22px; background: linear-gradient(135deg, #ef4444, #b91c1c); color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; letter-spacing:0.3px;">⟳ Logout &amp; Re-scan QR</button>
+                    <div style="color: var(--text-secondary); font-size: 11px; margin-top: 6px;">Use this if auto-replies stop working</div>
                 `;
             } else if (data.status === 'Connecting') {
                 qrPanel.innerHTML = `
