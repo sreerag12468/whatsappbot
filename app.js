@@ -378,6 +378,16 @@ async function connectToWhatsApp() {
                             const { text: replyText, image: replyImage, voice: replyVoice } = rule;
 
                             const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+                            // Mark message as read BEFORE replying - critical for delivery
+                            try {
+                                await sock.readMessages([msg.key]);
+                            } catch (e) {}
+
+                            // Subscribe to sender's presence so WhatsApp doesn't treat us as offline bot
+                            try {
+                                await sock.presenceSubscribe(senderJid);
+                            } catch (e) {}
                             const setPresence = async (type) => {
                                 try {
                                     await sock.sendPresenceUpdate(type, senderJid);
@@ -466,6 +476,19 @@ async function connectToWhatsApp() {
                             addLog(`Failed to send message: ${err.message}`);
                         }
                     }
+                }
+            }
+        });
+
+        // Track message delivery acknowledgements (1=sent, 2=delivered, 3=read, -1=error)
+        sock.ev.on('messages.update', (updates) => {
+            for (const update of updates) {
+                if (update.key.fromMe) {
+                    const ack = update.update?.status;
+                    if (ack === 1) addLog(`📤 Message sent (1 tick) to ${update.key.remoteJid?.split('@')[0]}`);
+                    else if (ack === 2) addLog(`✅ Message delivered (2 ticks) to ${update.key.remoteJid?.split('@')[0]}`);
+                    else if (ack === 3) addLog(`👁️ Message read by ${update.key.remoteJid?.split('@')[0]}`);
+                    else if (ack === -1) addLog(`❌ Message failed/rejected by WhatsApp for ${update.key.remoteJid?.split('@')[0]}`);
                 }
             }
         });
