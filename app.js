@@ -474,7 +474,9 @@ async function connectToWhatsApp() {
                 
                 const senderJid = msg.key.remoteJid;
                 const senderName = msg.pushName || 'WhatsApp User';
-                addLog(`Received message from ${senderName} (${senderJid.split('@')[0]}): "${text}"`);
+                addLog(`Received message from ${senderName} (${senderJid}): "${text}"`);
+                // Store the original message for quoted reply
+                const quotedMsg = msg;
                 
                 // Match keywords
                 const kwMap = loadKeywords();
@@ -524,7 +526,7 @@ async function connectToWhatsApp() {
                                 await sock.sendMessage(senderJid, { 
                                     image: imgBuffer, 
                                     caption: replyVoice ? undefined : replyText 
-                                });
+                                }, { quoted: quotedMsg });
                                 addLog(`Auto-reply sent image to ${senderName}.`);
                                 
                                 await setPresence('paused');
@@ -542,7 +544,7 @@ async function connectToWhatsApp() {
                                     audio: voiceBuffer, 
                                     mimetype: 'audio/ogg; codecs=opus', 
                                     ptt: true 
-                                });
+                                }, { quoted: quotedMsg });
                                 addLog(`Auto-reply sent voice note to ${senderName}.`);
                                 
                                 await setPresence('paused');
@@ -553,7 +555,7 @@ async function connectToWhatsApp() {
                                     const typingDuration = Math.min(1500 + replyText.length * 15, 6000);
                                     await delay(typingDuration);
                                     
-                                    await sock.sendMessage(senderJid, { text: replyText });
+                                    await sock.sendMessage(senderJid, { text: replyText }, { quoted: quotedMsg });
                                     addLog(`Auto-reply sent text message separately to ${senderName}.`);
                                     
                                     await setPresence('paused');
@@ -583,7 +585,7 @@ async function connectToWhatsApp() {
                                 if (linkPreview) {
                                     msgContent.linkPreview = linkPreview;
                                 }
-                                await sock.sendMessage(senderJid, msgContent);
+                                await sock.sendMessage(senderJid, msgContent, { quoted: quotedMsg });
                                 addLog(`Auto-reply sent text to ${senderName}.`);
                                 
                                 await setPresence('paused');
