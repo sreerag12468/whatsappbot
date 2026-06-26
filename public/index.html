@@ -456,6 +456,9 @@
                     <span>Manage Keyword Rules</span>
                     <button class="btn" onclick="openCreateModal()">+ Add Rule</button>
                 </div>
+                <div style="margin-bottom: 12px;">
+                    <input type="text" id="keyword-search" class="form-input" placeholder="🔍 Search keywords..." oninput="filterKeywords()" style="margin: 0; padding: 10px 14px 10px 36px; width: 100%; box-sizing: border-box;">
+                </div>
                 <div id="keywords-list" class="kw-list">
                     <!-- Dynamic keyword entries -->
                 </div>
@@ -638,19 +641,27 @@
             }
         });
 
-        // 3. Keyword Config Renderer
-        socket.on('keywords', (data) => {
-            currentKeywords = data;
+        function renderKeywords(data) {
             const container = document.getElementById('keywords-list');
             container.innerHTML = '';
 
-            const keys = Object.keys(data);
+            const searchVal = (document.getElementById('keyword-search')?.value || '').trim().toLowerCase();
+            const keys = Object.keys(data).filter(k => k.toLowerCase().includes(searchVal));
+            
             if (keys.length === 0) {
-                container.innerHTML = `
-                    <div style="text-align: center; color: var(--text-secondary); padding: 40px; border: 1px dashed var(--border-glass); border-radius: 12px;">
-                        No responder rules configured yet. Click "+ Add Rule" to get started.
-                    </div>
-                `;
+                if (searchVal) {
+                    container.innerHTML = `
+                        <div style="text-align: center; color: var(--text-secondary); padding: 40px; border: 1px dashed var(--border-glass); border-radius: 12px;">
+                            No rules matching "${searchVal}" found.
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <div style="text-align: center; color: var(--text-secondary); padding: 40px; border: 1px dashed var(--border-glass); border-radius: 12px;">
+                            No responder rules configured yet. Click "+ Add Rule" to get started.
+                        </div>
+                    `;
+                }
                 return;
             }
 
@@ -658,10 +669,7 @@
                 const item = document.createElement('div');
                 item.className = 'kw-item';
                 
-                // Escape single quotes and backslashes for JS string literal inside onclick
                 const escapedKey = k.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                
-                // Resolve rule shape (string or object)
                 const rule = typeof data[k] === 'string'
                     ? { text: data[k], image: null, voice: null }
                     : data[k];
@@ -693,7 +701,17 @@
                 `;
                 container.appendChild(item);
             });
+        }
+
+        // 3. Keyword Config Renderer
+        socket.on('keywords', (data) => {
+            currentKeywords = data;
+            renderKeywords(data);
         });
+
+        function filterKeywords() {
+            renderKeywords(currentKeywords);
+        }
 
         // 4. Live Logger
         const consoleLogs = document.getElementById('console-logs');
