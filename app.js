@@ -1,4 +1,5 @@
-import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion, getUrlInfo, DisconnectReason } from '@whiskeysockets/baileys';
+import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } from '@whiskeysockets/baileys';
+import { getLinkPreview } from 'link-preview-js';
 import pino from 'pino';
 import express from 'express';
 import http from 'http';
@@ -112,7 +113,8 @@ function addLog(text) {
 }
 
 // Keyword handlers
-const KEYWORDS_PATH = path.join(__dirname, 'keywords.json');
+// Allow overriding the keywords file path via env var (useful for Railway persistent volumes)
+const KEYWORDS_PATH = process.env.KEYWORDS_PATH || path.join(__dirname, 'keywords.json');
 function loadKeywords() {
     try {
         if (fs.existsSync(KEYWORDS_PATH)) {
@@ -277,7 +279,13 @@ app.post('/api/send', async (req, res) => {
             if (urls && urls.length > 0) {
                 const url = urls[0];
                 try {
-                    linkPreview = await getUrlInfo(url);
+                    const previewData = await getLinkPreview(url);
+                    linkPreview = {
+                        'canonical-url': previewData.url || url,
+                        'matched-text': url,
+                        title: previewData.title || '',
+                        description: previewData.description || '',
+                    };
                 } catch (urlErr) {
                     addLog(`Failed to generate link preview: ${urlErr.message}`);
                 }
@@ -364,8 +372,8 @@ async function connectToWhatsApp() {
     
     const { state, saveCreds } = await useMultiFileAuthState(authStateDir);
     
-    // Fetch latest WhatsApp Web version to prevent protocol mismatch errors (e.g. error code 405/411)
-    let version = [2, 3000, 1017578426]; // Safe fallback version
+    // Fetch latest WhatsApp Web version to prevent protocol mismatch errors
+    let version = [2, 3000, 1034074495]; // Safe fallback — updated for 2025 protocol
     try {
         const { version: latestVer, isLatest } = await fetchLatestBaileysVersion();
         version = latestVer;
@@ -379,16 +387,17 @@ async function connectToWhatsApp() {
     io.emit('status', { status: connectionStatus });
 
     try {
-        sock = makeWASocket.default ? makeWASocket.default({
+        sock = makeWASocket({
             version,
             auth: state,
             printQRInTerminal: false,
             logger: pino({ level: 'silent' }),
-        }) : makeWASocket({
-            version,
-            auth: state,
-            printQRInTerminal: false,
-            logger: pino({ level: 'silent' }),
+            // Browser fingerprint — required by Baileys v7 to avoid 401 handshake failures
+            browser: ['WhatsApp Bot', 'Chrome', '125.0.0'],
+            // Prevent premature timeout during QR auth (important for v7)
+            defaultQueryTimeoutMs: undefined,
+            // Keep connection alive
+            keepAliveIntervalMs: 25000,
         });
 
         sock.ev.on('creds.update', async () => {
@@ -575,7 +584,13 @@ async function connectToWhatsApp() {
                                 if (urls && urls.length > 0) {
                                     const url = urls[0];
                                     try {
-                                        linkPreview = await getUrlInfo(url);
+                                        const previewData = await getLinkPreview(url);
+                                        linkPreview = {
+                                            'canonical-url': previewData.url || url,
+                                            'matched-text': url,
+                                            title: previewData.title || '',
+                                            description: previewData.description || '',
+                                        };
                                     } catch (urlErr) {
                                         addLog(`Failed to generate link preview: ${urlErr.message}`);
                                     }
