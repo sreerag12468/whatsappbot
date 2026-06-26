@@ -417,16 +417,7 @@ app.post('/api/send', async (req, res) => {
             
             const msgContent = { text };
             if (linkPreview) {
-                msgContent.contextInfo = {
-                    externalAdReply: {
-                        title: linkPreview.title || '',
-                        body: linkPreview.description || '',
-                        mediaType: 1,
-                        previewType: "PHOTO",
-                        thumbnail: linkPreview.jpegThumbnail || undefined,
-                        sourceUrl: linkPreview['canonical-url'] || urls[0]
-                    }
-                };
+                msgContent.linkPreview = linkPreview;
             }
             await sock.sendMessage(jid, msgContent);
             addLog(`Text message successfully sent to: ${jid}`);
@@ -771,16 +762,7 @@ async function connectToWhatsApp() {
                                 
                                 const msgContent = { text: replyText };
                                 if (linkPreview) {
-                                    msgContent.contextInfo = {
-                                        externalAdReply: {
-                                            title: linkPreview.title || '',
-                                            body: linkPreview.description || '',
-                                            mediaType: 1,
-                                            previewType: "PHOTO",
-                                            thumbnail: linkPreview.jpegThumbnail || undefined,
-                                            sourceUrl: linkPreview['canonical-url'] || urls[0]
-                                        }
-                                    };
+                                    msgContent.linkPreview = linkPreview;
                                 }
                                 await sock.sendMessage(senderJid, msgContent);
                                 addLog(`Auto-reply sent text to ${senderName}.`);
