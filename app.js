@@ -47,36 +47,63 @@ function restoreSession(authDir) {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Helper function to transcode audio to strict OGG/Opus format using FFmpeg
-async function convertToOggOpus(base64Data) {
+// Helper function to transcode audio to strict OGG/Opus format using FFmpeg and return the file path
+async function convertToOggOpusFile(base64Data) {
     const tempDir = path.join(__dirname, 'temp_audio');
     if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir);
+        fs.mkdirSync(tempDir, { recursive: true });
     }
     
     const randomId = Math.random().toString(36).substring(7);
     const inputPath = path.join(tempDir, `input_${randomId}.webm`);
     const outputPath = path.join(tempDir, `output_${randomId}.ogg`);
     
+    // Ensure executable permissions on non-Windows
+    if (process.platform !== 'win32') {
+        try {
+            fs.chmodSync(ffmpegPath, 0o755);
+        } catch (e) {
+            console.error('Failed to chmod ffmpeg-static:', e);
+        }
+    }
+    
     try {
         const buffer = Buffer.from(base64Data.split(',')[1] || base64Data, 'base64');
         fs.writeFileSync(inputPath, buffer);
         
         // Transcode WebM/MP4 audio to Mono, 48kHz, Opus codec OGG container for WhatsApp compatibility
-        const command = `"${ffmpegPath}" -y -i "${inputPath}" -vn -c:a libopus -b:a 48k -ac 1 -avoid_negative_ts make_zero -f ogg "${outputPath}"`;
-        await execPromise(command);
-        
-        const oggBuffer = fs.readFileSync(outputPath);
-        return oggBuffer;
-    } catch (err) {
-        addLog(`[FFmpeg Error] ${err.message}`);
-        // Fallback to sending raw buffer if transcode fails
-        return Buffer.from(base64Data.split(',')[1] || base64Data, 'base64');
-    } finally {
+        // Try libopus first
+        let command = `"${ffmpegPath}" -y -i "${inputPath}" -vn -c:a libopus -b:a 48k -ac 1 -avoid_negative_ts make_zero -f ogg "${outputPath}"`;
         try {
-            if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-            if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-        } catch (e) {}
+            await execPromise(command);
+        } catch (err) {
+            addLog(`[FFmpeg libopus failed, trying native opus] ${err.message}`);
+            // Fallback to native opus encoder
+            command = `"${ffmpegPath}" -y -i "${inputPath}" -vn -c:a opus -b:a 48k -ac 1 -avoid_negative_ts make_zero -f ogg "${outputPath}"`;
+            await execPromise(command);
+        }
+        
+        if (fs.existsSync(inputPath)) {
+            try { fs.unlinkSync(inputPath); } catch (e) {}
+        }
+        
+        return { filePath: outputPath, isTranscoded: true };
+    } catch (err) {
+        addLog(`[FFmpeg transcoding failed completely] ${err.message}`);
+        // Fallback: write raw webm to temporary file and return it
+        const fallbackPath = path.join(tempDir, `fallback_${randomId}.webm`);
+        try {
+            const buffer = Buffer.from(base64Data.split(',')[1] || base64Data, 'base64');
+            fs.writeFileSync(fallbackPath, buffer);
+        } catch (writeErr) {
+            addLog(`[FFmpeg fallback write failed] ${writeErr.message}`);
+        }
+        
+        // Cleanup input and output
+        if (fs.existsSync(inputPath)) { try { fs.unlinkSync(inputPath); } catch (e) {} }
+        if (fs.existsSync(outputPath)) { try { fs.unlinkSync(outputPath); } catch (e) {} }
+        
+        return { filePath: fallbackPath, isTranscoded: false };
     }
 }
 
@@ -213,6 +240,40 @@ app.get('/api/logs', (req, res) => {
     res.json(logs);
 });
 
+app.get('/api/debug-ffmpeg', async (req, res) => {
+    try {
+        let exists = fs.existsSync(ffmpegPath);
+        let stats = exists ? fs.statSync(ffmpegPath) : null;
+        
+        if (exists && process.platform !== 'win32') {
+            try {
+                fs.chmodSync(ffmpegPath, 0o755);
+            } catch(e) {
+                addLog(`chmod in debug route failed: ${e.message}`);
+            }
+        }
+
+        const { stdout, stderr } = await execPromise(`"${ffmpegPath}" -version`);
+        res.json({
+            success: true,
+            exists,
+            stats,
+            ffmpegPath,
+            stdout,
+            stderr
+        });
+    } catch (err) {
+        res.json({
+            success: false,
+            exists: fs.existsSync(ffmpegPath),
+            ffmpegPath,
+            error: err.message,
+            stack: err.stack
+        });
+    }
+});
+
+
 app.post('/api/logout', async (req, res) => {
     try {
         if (sock) {
@@ -280,25 +341,40 @@ app.post('/api/send', async (req, res) => {
             const imgBuffer = Buffer.from(image.split(',')[1] || image, 'base64');
             const mimeMatch = image.match(/^data:([^;]+);base64,/);
             const mimetype = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-            // If text is provided and there is no voice note, send the text as caption
-            await sock.sendMessage(jid, { 
-                image: imgBuffer, 
-                mimetype: mimetype,
-                caption: voice ? undefined : text 
-            });
-            addLog(`Image successfully sent to: ${jid}`);
+            
+            // Write image to a temp file and send via url path to avoid stream buffer issues in Baileys
+            const tempImgPath = path.join(__dirname, `temp_image_${Math.random().toString(36).substring(7)}.jpg`);
+            fs.writeFileSync(tempImgPath, imgBuffer);
+            try {
+                await sock.sendMessage(jid, { 
+                    image: { url: tempImgPath }, 
+                    mimetype: mimetype,
+                    caption: voice ? undefined : text 
+                });
+                addLog(`Image successfully sent to: ${jid}`);
+            } finally {
+                if (fs.existsSync(tempImgPath)) {
+                    try { fs.unlinkSync(tempImgPath); } catch (e) {}
+                }
+            }
         }
 
         // 2. Send voice note if provided
         if (voice) {
             addLog('Transcoding manual browser audio to OGG/Opus...');
-            const voiceBuffer = await convertToOggOpus(voice);
-            await sock.sendMessage(jid, { 
-                audio: voiceBuffer, 
-                mimetype: 'audio/ogg; codecs=opus', 
-                ptt: true 
-            });
-            addLog(`Voice note successfully sent to: ${jid}`);
+            const { filePath, isTranscoded } = await convertToOggOpusFile(voice);
+            try {
+                await sock.sendMessage(jid, { 
+                    audio: { url: filePath }, 
+                    mimetype: isTranscoded ? 'audio/ogg; codecs=opus' : 'audio/webm', 
+                    ptt: true 
+                });
+                addLog(`Voice note successfully sent to: ${jid}`);
+            } finally {
+                if (fs.existsSync(filePath)) {
+                    try { fs.unlinkSync(filePath); } catch (e) {}
+                }
+            }
             
             // If there's text (and optionally an image, since caption was ignored when voice note was sent), send text separately:
             if (text) {
@@ -306,6 +382,7 @@ app.post('/api/send', async (req, res) => {
                 addLog(`Separated text message successfully sent to: ${jid}`);
             }
         }
+
 
         // 3. Send text message if only text is provided (no image, no voice)
         if (text && !image && !voice) {
@@ -581,12 +658,21 @@ async function connectToWhatsApp() {
                                 const mimeMatch = replyImage.match(/^data:([^;]+);base64,/);
                                 const mimetype = mimeMatch ? mimeMatch[1] : 'image/jpeg';
                                 addLog(`Image buffer size: ${imgBuffer.length} bytes, mimetype: ${mimetype}`);
-                                await sock.sendMessage(senderJid, { 
-                                    image: imgBuffer, 
-                                    mimetype: mimetype,
-                                    caption: replyVoice ? undefined : replyText 
-                                });
-                                addLog(`Auto-reply sent image to ${senderName}.`);
+                                
+                                const tempImgPath = path.join(__dirname, `temp_image_${Math.random().toString(36).substring(7)}.jpg`);
+                                fs.writeFileSync(tempImgPath, imgBuffer);
+                                try {
+                                    await sock.sendMessage(senderJid, { 
+                                        image: { url: tempImgPath }, 
+                                        mimetype: mimetype,
+                                        caption: replyVoice ? undefined : replyText 
+                                    });
+                                    addLog(`Auto-reply sent image to ${senderName}.`);
+                                } finally {
+                                    if (fs.existsSync(tempImgPath)) {
+                                        try { fs.unlinkSync(tempImgPath); } catch (e) {}
+                                    }
+                                }
                                 
                                 await setPresence('paused');
                                 await delay(1500); // Small interval between messages
@@ -596,15 +682,21 @@ async function connectToWhatsApp() {
                             if (replyVoice) {
                                 await setPresence('recording');
                                 addLog('Transcoding auto-reply audio to OGG/Opus...');
-                                const voiceBuffer = await convertToOggOpus(replyVoice);
+                                const { filePath, isTranscoded } = await convertToOggOpusFile(replyVoice);
                                 
-                                await delay(3500); // Simulate audio recording duration
-                                await sock.sendMessage(senderJid, { 
-                                    audio: voiceBuffer, 
-                                    mimetype: 'audio/ogg; codecs=opus', 
-                                    ptt: true 
-                                });
-                                addLog(`Auto-reply sent voice note to ${senderName}.`);
+                                try {
+                                    await delay(3500); // Simulate audio recording duration
+                                    await sock.sendMessage(senderJid, { 
+                                        audio: { url: filePath }, 
+                                        mimetype: isTranscoded ? 'audio/ogg; codecs=opus' : 'audio/webm', 
+                                        ptt: true 
+                                    });
+                                    addLog(`Auto-reply sent voice note to ${senderName}.`);
+                                } finally {
+                                    if (fs.existsSync(filePath)) {
+                                        try { fs.unlinkSync(filePath); } catch (e) {}
+                                    }
+                                }
                                 
                                 await setPresence('paused');
                                 await delay(1500); // Small interval before next message
