@@ -321,9 +321,12 @@ def get_channel_id(youtube) -> str:
         return _channel_id_cache
     try:
         ch = youtube.channels().list(part="id", mine=True).execute()
-        if ch.get("items"):
-            _channel_id_cache = ch["items"][0]["id"]
+        items = ch.get("items", [])
+        if items:
+            _channel_id_cache = items[0]["id"]
             log("INFO", f"Channel ID cached: {_channel_id_cache}")
+        else:
+            log("ERROR", "No YouTube channel found for this Google login. If your channel is a Brand Account, please click 'Link Google Account' again and make sure to select your specific YouTube channel/brand page instead of your general email address.")
     except Exception as e:
         log("ERROR", f"Could not fetch channel ID: {e}")
     return _channel_id_cache
