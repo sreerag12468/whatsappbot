@@ -9,7 +9,7 @@ import fs from 'fs';
 import path from 'path';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
-import { exec, spawn } from 'child_process';
+import { exec, spawn, execSync } from 'child_process';
 import { promisify } from 'util';
 import ffmpegPath from 'ffmpeg-static';
 import { createProxyMiddleware } from 'http-proxy-middleware';
@@ -181,6 +181,29 @@ const YT_BOT_DIR = path.join(__dirname, 'yt-bot');
 const YT_BOT_PORT = parseInt(PORT) + 1;
 let ytBotProcess = null;
 
+function findPythonBinary() {
+    if (process.platform === 'win32') return 'python';
+    const candidates = ['python3', 'python', 'python3.11', 'python3.10'];
+    for (const name of candidates) {
+        try {
+            const binPath = execSync(`which ${name}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+            if (binPath && fs.existsSync(binPath)) {
+                return binPath;
+            }
+        } catch (e) {}
+    }
+    const commonPaths = [
+        '/usr/bin/python3',
+        '/usr/bin/python',
+        '/usr/local/bin/python3',
+        '/usr/local/bin/python'
+    ];
+    for (const p of commonPaths) {
+        if (fs.existsSync(p)) return p;
+    }
+    return 'python3';
+}
+
 function startYTBot() {
     const ytAppPath = path.join(YT_BOT_DIR, 'app.py');
     if (!fs.existsSync(ytAppPath)) {
@@ -188,9 +211,10 @@ function startYTBot() {
         return;
     }
 
+    const pythonBin = findPythonBinary();
+    console.log(`[YT Bot] Using python executable: ${pythonBin}`);
+    addLog(`[YT Bot] Found python binary: ${pythonBin}`);
     console.log('[YT Bot] Starting Python Flask YT bot on internal port', YT_BOT_PORT);
-    
-    const pythonBin = process.platform === 'win32' ? 'python' : 'python3';
     
     const ytProc = spawn(pythonBin, ['app.py'], {
         stdio: 'pipe',
