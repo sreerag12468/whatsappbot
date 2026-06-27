@@ -183,7 +183,28 @@ let ytBotProcess = null;
 
 function findPythonBinary() {
     if (process.platform === 'win32') return 'python';
-    const candidates = ['python3', 'python', 'python3.11', 'python3.10'];
+    
+    // Diagnostic log PATH and standard search paths
+    addLog(`[YT Debug] PATH: ${process.env.PATH}`);
+    try {
+        const binSearch = execSync('which -a python python3 python3.11 python3.10 python3.9 python3.8 python3.7 2>&1 || true').toString().trim();
+        addLog(`[YT Debug] 'which' search results:\n${binSearch}`);
+    } catch (e) {
+        addLog(`[YT Debug] 'which' failed: ${e.message}`);
+    }
+    
+    try {
+        const binList = execSync('ls -la /usr/bin/python* /usr/local/bin/python* /opt/python*/bin/python* 2>/dev/null || true').toString().trim();
+        if (binList) {
+            addLog(`[YT Debug] Found python files:\n${binList}`);
+        } else {
+            addLog(`[YT Debug] No python files found in standard paths.`);
+        }
+    } catch (e) {
+        addLog(`[YT Debug] ls failed: ${e.message}`);
+    }
+
+    const candidates = ['python3', 'python', 'python3.11', 'python3.10', 'python3.9'];
     for (const name of candidates) {
         try {
             const binPath = execSync(`which ${name}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
