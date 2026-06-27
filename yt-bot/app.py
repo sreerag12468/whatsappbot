@@ -529,7 +529,14 @@ def index():
             with open(TOKEN_FILE, "w", encoding="utf-8") as f:
                 f.write(flow.credentials.to_json())
             log("SUCCESS", "Google account linked successfully.")
-            return redirect("/yt/" if os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_STATIC_URL") or os.environ.get("RAILWAY_PUBLIC_DOMAIN") else "/")
+            # On Railway: redirect to main control center (/) so the iframe auto-refreshes with auth state
+            # On local dev: redirect to /yt/ (Flask standalone UI)
+            is_railway = bool(
+                os.environ.get("RAILWAY_ENVIRONMENT") or
+                os.environ.get("RAILWAY_SERVICE_ID") or
+                os.environ.get("RAILWAY_PROJECT_ID")
+            )
+            return redirect("/" if is_railway else "/yt/")
         except Exception as e:
             log("ERROR", f"OAuth callback error: {e}")
             return f"Authorization failed: {e}", 400

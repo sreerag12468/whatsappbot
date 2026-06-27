@@ -230,7 +230,16 @@ textarea{resize:vertical;min-height:56px}
   <div style="font-size:2.5rem;margin-bottom:1rem">🔑</div>
   <h2>Connect YouTube Account</h2>
   <p>Link your Google account so the bot can read comments and auto-reply on your behalf. Sessions are saved permanently — you only need to do this once.</p>
-  <a id="auth-link" href="/auth/start" class="btn btn-primary" style="font-size:1rem;padding:.85rem 2rem">Link Google Account</a>
+  <a id="auth-link" href="#" class="btn btn-primary" style="font-size:1rem;padding:.85rem 2rem" onclick="doAuth(event)">Link Google Account</a>
+  <script>
+  function doAuth(e) {
+    e.preventDefault();
+    // Determine base prefix (running in proxy /yt/ or standalone /)
+    var prefix = (window.location.pathname.indexOf('/yt') === 0) ? '/yt' : '';
+    // Break out of iframe: navigate top-level window to auth
+    window.top.location.href = prefix + '/auth/start';
+  }
+  </script>
 </div>
 
 {% else %}
