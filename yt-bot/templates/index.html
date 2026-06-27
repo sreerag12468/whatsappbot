@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube Auto-Reply Bot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:       #07090f;
+  --surface:  rgba(14,18,32,0.75);
+  --s2:       rgba(255,255,255,0.025);
+  --bd:       rgba(255,255,255,0.07);
+  --bd2:      rgba(255,255,255,0.13);
+  --text:     #e8eaf0;
+  --muted:    #64748b;
+  --primary:  #6366f1;
+  --pg:       rgba(99,102,241,0.28);
+  --green:    #10b981;
+  --gg:       rgba(16,185,129,0.22);
+  --yellow:   #f59e0b;
+  --red:      #ef4444;
+  --r:        14px;
+  --tr:       0.22s cubic-bezier(.4,0,.2,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Inter',sans-serif;
+  background:radial-gradient(ellipse 110% 55% at 50% -8%,#180e4a 0%,var(--bg) 68%);
+  color:var(--text);min-height:100vh;
+  padding:1.5rem 1rem 3rem;
+}
+h1,h2,h3,h4{font-family:'Outfit',sans-serif}
+.wrap{max-width:1300px;margin:0 auto;display:flex;flex-direction:column;gap:1.4rem}
+
+/* glass */
+.card{
+  background:var(--surface);border:1px solid var(--bd);
+  backdrop-filter:blur(20px);border-radius:var(--r);
+  padding:1.4rem;box-shadow:0 8px 30px rgba(0,0,0,.3);
+}
+
+/* ── Header ── */
+.header-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+.brand h1{font-size:1.55rem;background:linear-gradient(130deg,#fff 0%,#a5b4fc 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.brand p{color:var(--muted);font-size:.78rem;margin-top:.1rem}
+
+/* ── Master 24/7 control ── */
+.master-ctrl{
+  display:flex;align-items:center;gap:1.1rem;
+  background:rgba(255,255,255,.035);border:1px solid var(--bd2);
+  border-radius:50px;padding:.5rem 1.2rem;
+}
+.master-label{font-size:.82rem;font-weight:600;color:var(--muted)}
+.bot-pill{
+  display:inline-flex;align-items:center;gap:.4rem;
+  font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  padding:.25rem .75rem;border-radius:50px;
+}
+.bot-pill.on {color:var(--green);background:rgba(16,185,129,.13);box-shadow:0 0 10px rgba(16,185,129,.12)}
+.bot-pill.off{color:var(--yellow);background:rgba(245,158,11,.1)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.bot-pill.on .dot{animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.8)}70%{box-shadow:0 0 0 6px transparent}100%{box-shadow:0 0 0 0 transparent}}
+
+/* toggle */
+.sw{position:relative;display:inline-block;width:52px;height:28px}
+.sw input{opacity:0;width:0;height:0}
+.sl{
+  position:absolute;inset:0;background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.06);border-radius:34px;
+  cursor:pointer;transition:.3s;
+}
+.sl:before{
+  content:"";position:absolute;height:20px;width:20px;left:3px;bottom:3px;
+  background:#fff;border-radius:50%;transition:.3s;box-shadow:0 1px 4px rgba(0,0,0,.4);
+}
+input:checked+.sl{background:var(--primary);box-shadow:0 0 14px var(--pg)}
+input:checked+.sl:before{transform:translateX(24px)}
+
+/* ── Quota ── */
+.quota-card{display:flex;flex-direction:column;gap:.6rem}
+.quota-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem}
+.quota-header h3{font-size:1rem;background:linear-gradient(130deg,#fff,#c4b5fd);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.q-numbers{display:flex;gap:1.5rem;font-size:.82rem}
+.q-num{display:flex;flex-direction:column;align-items:flex-end}
+.q-num span:first-child{font-weight:700;font-size:1.1rem}
+.q-num span:last-child{color:var(--muted);font-size:.7rem}
+.qbar-bg{height:12px;background:rgba(255,255,255,.04);border-radius:100px;overflow:hidden;border:1px solid var(--bd)}
+.qbar-fill{height:100%;background:linear-gradient(90deg,var(--primary),#ec4899);transition:width .7s ease;box-shadow:0 0 8px var(--pg)}
+.quota-sub{font-size:.74rem;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:.4rem}
+.quota-stop-badge{
+  display:none;align-items:center;gap:.4rem;
+  background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);
+  color:var(--red);padding:.25rem .8rem;border-radius:50px;
+  font-size:.74rem;font-weight:700;
+}
+
+/* ── Settings ── */
+.settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:.85rem}
+.field label{display:block;font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.28rem}
+input[type=number],input[type=text],textarea{
+  width:100%;background:rgba(255,255,255,.04);border:1px solid var(--bd);
+  border-radius:7px;color:var(--text);padding:.45rem .7rem;
+  font-family:inherit;font-size:.88rem;transition:var(--tr);
+}
+input:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--pg);background:rgba(255,255,255,.06)}
+textarea{resize:vertical;min-height:56px}
+
+/* ── Buttons ── */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:.35rem;
+  padding:.55rem 1.1rem;border:none;border-radius:8px;
+  font-family:inherit;font-size:.83rem;font-weight:600;
+  cursor:pointer;transition:var(--tr);white-space:nowrap;
+}
+.btn-primary{background:linear-gradient(135deg,var(--primary),#4f46e5);color:#fff;box-shadow:0 3px 10px var(--pg)}
+.btn-primary:hover{filter:brightness(1.12);transform:translateY(-1px)}
+.btn-ghost{background:rgba(255,255,255,.05);color:var(--text);border:1px solid var(--bd2)}
+.btn-ghost:hover{background:rgba(255,255,255,.09)}
+.btn-sm{padding:.32rem .7rem;font-size:.76rem}
+.btn:active{transform:translateY(0)!important}
+
+/* ── Section title ── */
+.sec-title{
+  font-size:1rem;font-weight:700;margin-bottom:.9rem;
+  background:linear-gradient(130deg,#fff,#cbd5e1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+
+/* ── Video list ── */
+.vid-card{
+  background:var(--s2);border:1px solid var(--bd);
+  border-radius:11px;overflow:hidden;transition:var(--tr);
+}
+.vid-card:hover{border-color:rgba(255,255,255,.11)}
+.vid-card.enabled{border-color:rgba(99,102,241,.4);background:rgba(99,102,241,.04)}
+.vid-card.active{border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.035)}
+
+/* header row */
+.vid-header{
+  display:grid;grid-template-columns:88px 1fr auto;
+  align-items:center;gap:.9rem;padding:.8rem 1rem;cursor:pointer;user-select:none;
+}
+.vid-thumb{width:88px;height:50px;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,.1)}
+.vid-title{font-size:.88rem;font-weight:500;line-height:1.3;margin-bottom:.18rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.vid-meta{font-size:.7rem;color:var(--muted)}
+.vid-right{display:flex;align-items:center;gap:.85rem;flex-shrink:0}
+.vid-status-badge{
+  font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+  padding:.2rem .6rem;border-radius:50px;
+}
+.badge-active{color:var(--green);background:rgba(16,185,129,.13)}
+.badge-ready{color:var(--primary);background:rgba(99,102,241,.13)}
+.badge-norules{color:var(--muted);background:rgba(255,255,255,.06)}
+.expand-arr{font-size:.75rem;color:var(--muted);transition:transform .22s}
+.vid-card.open .expand-arr{transform:rotate(180deg)}
+
+/* config panel */
+.vid-config{
+  display:none;padding:0 1rem 1rem;
+  border-top:1px solid var(--bd);background:rgba(0,0,0,.15);
+}
+.vid-card.open .vid-config{display:block}
+
+.config-hint{font-size:.76rem;color:var(--muted);line-height:1.6;padding:.65rem 0 .4rem}
+.rules-list{display:flex;flex-direction:column;gap:.55rem;margin-bottom:.75rem}
+.rule-row{
+  display:grid;grid-template-columns:1fr 1fr auto;
+  gap:.55rem;align-items:start;
+  background:rgba(255,255,255,.02);border:1px solid var(--bd);
+  border-radius:8px;padding:.6rem;
+}
+@media(max-width:580px){.rule-row{grid-template-columns:1fr}}
+.rule-field label{font-size:.66rem;font-weight:700;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:.22rem}
+.rule-del{
+  align-self:flex-end;padding:.35rem .5rem;
+  background:rgba(239,68,68,.1);color:var(--red);
+  border:1px solid rgba(239,68,68,.18);border-radius:6px;
+  cursor:pointer;font-size:.9rem;font-weight:700;transition:var(--tr);
+  line-height:1;
+}
+.rule-del:hover{background:rgba(239,68,68,.2)}
+.default-row{display:grid;grid-template-columns:auto 1fr;gap:.75rem;align-items:center;margin-top:.7rem}
+.default-row label{font-size:.74rem;color:var(--muted);white-space:nowrap}
+.cfg-footer{display:flex;gap:.6rem;justify-content:flex-end;margin-top:.85rem}
+
+/* ── Any Comment row ── */
+.any-comment-row{
+  display:flex;align-items:center;gap:.75rem;
+  background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.22);
+  border-radius:8px;padding:.65rem .8rem;margin-bottom:.7rem;
+}
+.any-comment-row .ac-label{
+  font-size:.74rem;font-weight:700;color:#a5b4fc;
+  white-space:nowrap;display:flex;align-items:center;gap:.4rem;
+}
+.any-comment-row .ac-badge{
+  font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+  background:rgba(99,102,241,.28);color:#a5b4fc;padding:.15rem .45rem;border-radius:50px;
+}
+.any-comment-row input[type=text]{
+  flex:1;font-size:.83rem;
+}
+.ac-hint{font-size:.68rem;color:var(--muted);margin-left:.2rem;white-space:nowrap;}
+
+/* ── Log ── */
+.log-wrap{height:250px;overflow-y:auto;background:rgba(2,4,10,.85);border:1px solid rgba(255,255,255,.06);border-radius:9px;padding:.9rem;font-family:'JetBrains Mono',monospace;font-size:.76rem;display:flex;flex-direction:column;gap:.22rem}
+.ll{line-height:1.45}
+.ll.SUCCESS{color:#34d399}.ll.WARNING{color:#fbbf24}.ll.ERROR{color:#f87171}.ll.INFO{color:#94a3b8}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:10px}
+
+/* ── Auth landing ── */
+.auth-land{text-align:center;padding:4rem 2rem;max-width:480px;margin:3rem auto}
+.auth-land h2{font-size:1.7rem;margin-bottom:.7rem}
+.auth-land p{color:var(--muted);line-height:1.7;margin-bottom:2rem}
+
+/* spinner */
+.spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:rot .65s linear infinite;display:inline-block;flex-shrink:0}
+@keyframes rot{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+{% if not authenticated %}
+<div class="auth-land card">
+  <div style="font-size:2.5rem;margin-bottom:1rem">🔑</div>
+  <h2>Connect YouTube Account</h2>
+  <p>Link your Google account so the bot can read comments and auto-reply on your behalf. Sessions are saved permanently — you only need to do this once.</p>
+  <a href="/auth/start" class="btn btn-primary" style="font-size:1rem;padding:.85rem 2rem">Link Google Account</a>
+</div>
+
+{% else %}
+
+<!-- ══ HEADER ══════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <div class="header-row">
+    <div class="brand">
+      <h1>YouTube Auto-Reply Bot</h1>
+      <p>24/7 comment automation · per-video keyword rules · one reply per user · sessions always saved</p>
+    </div>
+    <div class="master-ctrl">
+      <span class="master-label">24/7 Bot</span>
+      <div id="bot-pill" class="bot-pill off"><span class="dot"></span><span id="bot-txt">Off</span></div>
+      <label class="sw" title="Toggle 24/7 global bot">
+        <input type="checkbox" id="master-sw" onchange="toggleBot(this.checked)">
+        <span class="sl"></span>
+      </label>
+    </div>
+  </div>
+</div>
+
+<!-- ══ QUOTA ═══════════════════════════════════════════════════════════════ -->
+<div class="card quota-card">
+  <div class="quota-header">
+    <h3>📊 Daily API Quota</h3>
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+      <div id="quota-stop-badge" class="quota-stop-badge">⛔ Quota limit reached — resumes tomorrow</div>
+      <div class="q-numbers">
+        <div class="q-num"><span id="q-used">0</span><span>Used</span></div>
+        <div class="q-num" style="color:var(--muted)"><span>/ 10,000</span><span>Daily cap</span></div>
+        <div class="q-num" style="color:var(--green)"><span id="q-rem">10,000</span><span>Left</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="qbar-bg"><div id="q-bar" class="qbar-fill" style="width:0%"></div></div>
+  <div class="quota-sub">
+    <span id="q-pct">0% used</span>
+    <span style="color:var(--yellow)">⚠ Bot stops automatically at 9,599 units</span>
+  </div>
+</div>
+
+<!-- ══ SETTINGS ════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <div class="sec-title">⚙️ Poller Settings</div>
+  <div class="settings-grid">
+    <div class="field"><label>Poll interval (s)</label><input type="number" id="s-interval" value="120" min="10"></div>
+    <div class="field"><label>Max comments</label><input type="number" id="s-max" value="20" min="1" max="50"></div>
+    <div class="field"><label>Min reply delay (s)</label><input type="number" id="s-dmin" value="8" min="1"></div>
+    <div class="field"><label>Max reply delay (s)</label><input type="number" id="s-dmax" value="20" min="1"></div>
+  </div>
+  <div style="margin-top:.85rem;display:flex;justify-content:flex-end">
+    <button class="btn btn-primary btn-sm" onclick="savePollerSettings()">Save Settings</button>
+  </div>
+</div>
+
+<!-- ══ VIDEOS ══════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.6rem;margin-bottom:.5rem">
+    <div class="sec-title" style="margin:0">📹 Videos &amp; Keyword Rules</div>
+    <span id="videos-loading" style="font-size:.76rem;color:var(--muted)"></span>
+  </div>
+  <p style="color:var(--muted);font-size:.78rem;margin-bottom:.9rem;line-height:1.65">
+    Toggle the <strong>24/7</strong> switch on each video. Click a row to expand and add keyword rules.
+    The bot only runs a video when: <strong>global 24/7 ON</strong> + <strong>video toggle ON</strong> + <strong>rules saved</strong>.<br>
+    Each user gets <strong>one reply only</strong> — even across restarts.
+  </p>
+  <div id="video-container">
+    <div style="text-align:center;padding:2.5rem;color:var(--muted)">
+      <div class="spin" style="margin:0 auto .7rem"></div>Loading your videos…
+    </div>
+  </div>
+</div>
+
+<!-- ══ LOG ═════════════════════════════════════════════════════════════════ -->
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+    <div class="sec-title" style="margin:0">📟 Live Activity Log</div>
+    <span style="font-size:.72rem;color:var(--green);font-weight:600">● live</span>
+  </div>
+  <div id="log-box" class="log-wrap">
+    <span class="ll INFO">Waiting for activity…</span>
+  </div>
+</div>
+
+{% endif %}
+</div><!-- /wrap -->
+
+<script>
+// ══ State ════════════════════════════════════════════════════════════════════
+const S = {
+  bot_running: false,
+  quota_used: 0, quota_remaining: 10000, quota_stopped: false,
+  poll_interval: 120, reply_delay_min: 8, reply_delay_max: 20, max_results: 20,
+  automated_video_ids: [], video_configs: {}, videos: []
+};
+
+{% if authenticated %}
+document.addEventListener("DOMContentLoaded", () => {
+  fetchStatus();
+  fetchVideos();
+  setInterval(fetchStatus, 4000);
+});
+{% endif %}
+
+// ══ API ════════════════════════════════════════════════════════════════════════
+async function api(url, method = "GET", body = null) {
+  const o = { method, headers: {"Content-Type":"application/json"} };
+  if (body) o.body = JSON.stringify(body);
+  return (await fetch(url, o)).json();
+}
+
+// ══ Status ════════════════════════════════════════════════════════════════════
+async function fetchStatus() {
+  try {
+    const d = await api("/api/status");
+    Object.assign(S, d);
+    updateMasterSwitch();
+    updateQuota();
+    updateSettingFields();
+    renderLogs(d.logs || []);
+    syncVideoStates();
+  } catch(e){}
+}
+
+function updateMasterSwitch() {
+  const pill = document.getElementById("bot-pill");
+  const txt  = document.getElementById("bot-txt");
+  const sw   = document.getElementById("master-sw");
+  if (!pill) return;
+  pill.className = "bot-pill " + (S.bot_running ? "on" : "off");
+  txt.textContent = S.bot_running ? "Active" : "Off";
+  if (sw && sw.checked !== S.bot_running) sw.checked = S.bot_running;
+}
+
+function updateQuota() {
+  const pct = Math.min(100, ((S.quota_used / 10000) * 100)).toFixed(1);
+  document.getElementById("q-used").textContent = S.quota_used.toLocaleString();
+  document.getElementById("q-rem").textContent  = S.quota_remaining.toLocaleString();
+  document.getElementById("q-pct").textContent  = pct + "% used";
+  const bar = document.getElementById("q-bar");
+  bar.style.width = pct + "%";
+  bar.style.background = pct > 95 ? "linear-gradient(90deg,#ef4444,#b91c1c)"
+    : pct > 80 ? "linear-gradient(90deg,#f59e0b,#d97706)"
+    : "linear-gradient(90deg,var(--primary),#ec4899)";
+  const badge = document.getElementById("quota-stop-badge");
+  badge.style.display = S.quota_stopped ? "inline-flex" : "none";
+}
+
+function updateSettingFields() {
+  const map = {"s-interval":"poll_interval","s-max":"max_results","s-dmin":"reply_delay_min","s-dmax":"reply_delay_max"};
+  Object.entries(map).forEach(([id,key]) => {
+    const el = document.getElementById(id);
+    if (el && el !== document.activeElement) el.value = S[key];
+  });
+}
+
+// ══ Logs ══════════════════════════════════════════════════════════════════════
+function renderLogs(logs) {
+  const box = document.getElementById("log-box");
+  if (!box) return;
+  const atBottom = box.scrollHeight - box.clientHeight <= box.scrollTop + 80;
+  box.innerHTML = "";
+  (logs.length ? logs : ["(no activity yet)"]).forEach(l => {
+    const s = document.createElement("span");
+    s.className = "ll " + (l.includes("[SUCCESS]") ? "SUCCESS" : l.includes("[WARNING]") ? "WARNING" : l.includes("[ERROR]") ? "ERROR" : "INFO");
+    s.textContent = l;
+    box.appendChild(s);
+  });
+  if (atBottom) box.scrollTop = box.scrollHeight;
+}
+
+// ══ Videos ════════════════════════════════════════════════════════════════════
+async function fetchVideos() {
+  document.getElementById("videos-loading").textContent = "Loading…";
+  try {
+    const data = await api("/api/videos");
+    document.getElementById("videos-loading").textContent = "";
+    if (data.error) {
+      document.getElementById("video-container").innerHTML = `<div style="color:var(--red);padding:1rem">${data.error}</div>`;
+      return;
+    }
+    S.videos = data;
+    renderVideos();
+  } catch(e) {
+    document.getElementById("video-container").innerHTML = '<div style="color:var(--red);padding:1rem">Failed to load videos.</div>';
+  }
+}
+
+function getVideoStatus(vid, hasRules) {
+  const isAuto = S.automated_video_ids.includes(vid);
+  if (isAuto && hasRules && S.bot_running) return "active";
+  if (isAuto && hasRules) return "ready";
+  return "norules";
+}
+
+function renderVideos() {
+  const c = document.getElementById("video-container");
+  if (!c || !S.videos.length) {
+    if (c) c.innerHTML = '<div style="color:var(--muted);padding:2rem;text-align:center">No videos found.</div>';
+    return;
+  }
+  c.innerHTML = "";
+  S.videos.forEach(v => {
+    const cfg       = v.config || {rules:[], default_reply:""};
+    const isAuto    = v.automated;
+    const hasRules  = v.has_rules;
+    const dateStr   = v.published_at ? new Date(v.published_at).toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"}) : "";
+    const statusKey = getVideoStatus(v.id, hasRules);
+    const badgeText = statusKey === "active" ? "● Active" : statusKey === "ready" ? "✓ Ready" : "No rules";
+    const badgeCls  = statusKey === "active" ? "badge-active" : statusKey === "ready" ? "badge-ready" : "badge-norules";
+    const cardCls   = statusKey === "active" ? "active" : isAuto ? "enabled" : "";
+
+    const card = document.createElement("div");
+    card.className = `vid-card ${cardCls}`;
+    card.id = "vcard-" + v.id;
+
+    card.innerHTML = `
+      <div class="vid-header" onclick="toggleExpand('${v.id}')">
+        <img class="vid-thumb" src="${v.thumbnail}" alt="" loading="lazy">
+        <div>
+          <div class="vid-title" title="${esc(v.title)}">${esc(v.title)}</div>
+          <div class="vid-meta">${v.id} · ${dateStr}</div>
+        </div>
+        <div class="vid-right" onclick="event.stopPropagation()">
+          <span id="badge-${v.id}" class="vid-status-badge ${badgeCls}">${badgeText}</span>
+          <label class="sw" title="Enable 24/7 for this video">
+            <input type="checkbox" id="sw-${v.id}" ${isAuto?"checked":""} onchange="toggleAuto('${v.id}',this.checked)">
+            <span class="sl"></span>
+          </label>
+          <span class="expand-arr">▼</span>
+        </div>
+      </div>
+
+      <div class="vid-config" id="cfg-${v.id}">
+        <div class="config-hint">
+          Add keyword rules. Keywords are comma-separated (e.g. <code>3d, print, model</code>).
+          Bot picks the first matching rule. Each user receives <strong>at most one reply</strong> — saved permanently.
+        </div>
+
+        <!-- ── Any Comment Reply ── -->
+        <div class="any-comment-row">
+          <label class="sw" title="Reply to every comment on this video">
+            <input type="checkbox" id="ac-sw-${v.id}" ${cfg.any_comment_enabled?"checked":""}>
+            <span class="sl"></span>
+          </label>
+          <span class="ac-label">🌐 Any Comment <span class="ac-badge">wildcard</span></span>
+          <input type="text" id="ac-rp-${v.id}" value="${esc(cfg.any_comment_reply||'')}" placeholder="Reply sent to every comment…" title="This reply is sent for every comment if the toggle is ON">
+          <span class="ac-hint" title="Overrides keyword rules — sends this reply to every commenter">⚡ sends to ALL</span>
+        </div>
+
+        <div class="rules-list" id="rules-${v.id}"></div>
+        <button class="btn btn-ghost btn-sm" onclick="addRule('${v.id}')">+ Add Keyword Rule</button>
+        <div class="default-row">
+          <label>Default reply<br><span style="font-size:.67rem">(no match)</span></label>
+          <input type="text" id="def-${v.id}" value="${esc(cfg.default_reply)}" placeholder="Thanks for watching!">
+        </div>
+        <div class="cfg-footer">
+          <span id="seen-count-${v.id}" style="font-size:.72rem;color:var(--muted);align-self:center">⏳ Loading seen count…</span>
+          <button class="btn btn-ghost btn-sm" style="color:var(--yellow);border-color:rgba(245,158,11,.3)" onclick="clearSeen('${v.id}')" title="Reset the list of users who already got a reply — they will be eligible for replies again">
+            🔄 Reset Seen Users
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="saveVideoConfig('${v.id}')">💾 Save Rules</button>
+        </div>
+      </div>
+    `;
+    c.appendChild(card);
+
+    // Render existing rules
+    (cfg.rules || []).forEach(r => addRuleDOM(v.id, r.keywords.join(", "), r.reply));
+
+    // Load seen count for this video
+    loadSeenCount(v.id);
+  });
+}
+
+function syncVideoStates() {
+  if (!S.videos.length) return;
+  S.videos.forEach(v => {
+    const sw   = document.getElementById("sw-" + v.id);
+    const card = document.getElementById("vcard-" + v.id);
+    const badge= document.getElementById("badge-" + v.id);
+    if (!card) return;
+
+    // Reload has_rules from server data (updated after save)
+    const serverVid = S.videos.find(x => x.id === v.id);
+    const cfg = S.video_configs[v.id] || {};
+    const hasRules = !!(cfg.rules?.length || cfg.default_reply);
+    const isAuto   = S.automated_video_ids.includes(v.id);
+    if (sw && sw.checked !== isAuto) sw.checked = isAuto;
+
+    const statusKey = getVideoStatus(v.id, hasRules);
+    if (badge) {
+      badge.className = "vid-status-badge " + (statusKey === "active" ? "badge-active" : statusKey === "ready" ? "badge-ready" : "badge-norules");
+      badge.textContent = statusKey === "active" ? "● Active" : statusKey === "ready" ? "✓ Ready" : "No rules";
+    }
+    card.classList.toggle("active",   statusKey === "active");
+    card.classList.toggle("enabled",  isAuto && statusKey !== "active");
+    card.classList.remove("vid-card.active");
+  });
+}
+
+function toggleExpand(vid) {
+  document.getElementById("vcard-" + vid)?.classList.toggle("open");
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ══ Toggle per-video 24/7 ═════════════════════════════════════════════════════
+async function toggleAuto(vid, checked) {
+  let ids = [...S.automated_video_ids];
+  if (checked) { if (!ids.includes(vid)) ids.push(vid); }
+  else ids = ids.filter(i => i !== vid);
+  await api("/api/settings","POST",{automated_video_ids: ids});
+  S.automated_video_ids = ids;
+  syncVideoStates();
+}
+
+// ══ Rules CRUD ════════════════════════════════════════════════════════════════
+function addRule(vid) { addRuleDOM(vid, "", ""); }
+
+function addRuleDOM(vid, keywords, reply) {
+  const list = document.getElementById("rules-" + vid);
+  if (!list) return;
+  const row = document.createElement("div");
+  row.className = "rule-row";
+  row.innerHTML = `
+    <div class="rule-field">
+      <label>Keywords (comma-separated)</label>
+      <input type="text" class="kw-in" value="${esc(keywords)}" placeholder="3d, print, model">
+    </div>
+    <div class="rule-field">
+      <label>Reply text</label>
+      <input type="text" class="rp-in" value="${esc(reply)}" placeholder="Hello! Thanks for commenting…">
+    </div>
+    <button class="rule-del" onclick="this.closest('.rule-row').remove()" title="Remove">&times;</button>
+  `;
+  list.appendChild(row);
+}
+
+async function saveVideoConfig(vid) {
+  const list  = document.getElementById("rules-" + vid);
+  const defEl = document.getElementById("def-" + vid);
+  const acSw  = document.getElementById("ac-sw-" + vid);
+  const acRp  = document.getElementById("ac-rp-" + vid);
+
+  const rules = [];
+  list.querySelectorAll(".rule-row").forEach(row => {
+    const kw = row.querySelector(".kw-in").value.trim();
+    const rp = row.querySelector(".rp-in").value.trim();
+    if (kw && rp) rules.push({ keywords: kw.split(",").map(k => k.trim()).filter(Boolean), reply: rp });
+  });
+
+  const anyEnabled = acSw ? acSw.checked : false;
+  const anyReply   = acRp ? acRp.value.trim() : "";
+
+  // Warn if Any Comment is ON but no reply text
+  if (anyEnabled && !anyReply) {
+    showToast("⚠️ 'Any Comment' is ON but reply text is empty!");
+    return;
+  }
+
+  const cfg = {
+    rules,
+    default_reply:       defEl?.value.trim() || "",
+    any_comment_enabled: anyEnabled,
+    any_comment_reply:   anyReply
+  };
+  const configs = { ...S.video_configs, [vid]: cfg };
+  await api("/api/settings","POST",{ video_configs: configs });
+  S.video_configs = configs;
+
+  // Update has_rules on local video object
+  const vObj = S.videos.find(v => v.id === vid);
+  if (vObj) vObj.has_rules = !!(rules.length || cfg.default_reply || (anyEnabled && anyReply));
+  syncVideoStates();
+  showToast("Rules saved!");
+}
+
+// ══ Poller settings ═══════════════════════════════════════════════════════════
+async function savePollerSettings() {
+  const d = {
+    poll_interval:   +document.getElementById("s-interval").value,
+    max_results:     +document.getElementById("s-max").value,
+    reply_delay_min: +document.getElementById("s-dmin").value,
+    reply_delay_max: +document.getElementById("s-dmax").value,
+  };
+  if (d.reply_delay_max < d.reply_delay_min) { alert("Max delay must be ≥ Min delay"); return; }
+  await api("/api/settings","POST",d);
+  showToast("Poller settings saved!");
+}
+
+// ══ Global 24/7 toggle ════════════════════════════════════════════════════════
+async function toggleBot(checked) {
+  const d = await api("/api/bot/control","POST",{ bot_running: checked });
+  S.bot_running = d.bot_running;
+  updateMasterSwitch();
+  syncVideoStates();
+}
+
+// ══ Seen-users helpers ════════════════════════════════════════════════════════
+async function loadSeenCount(vid) {
+  try {
+    const d = await api(`/api/seen/count/${vid}`);
+    const el = document.getElementById("seen-count-" + vid);
+    if (el) el.textContent = `👥 ${d.seen_count} user${d.seen_count !== 1 ? 's' : ''} already replied to`;
+  } catch(e) {}
+}
+
+async function clearSeen(vid) {
+  if (!confirm(`Reset seen-users for this video?\nThey will be eligible for a reply again (useful for testing or re-engaging commenters).`)) return;
+  const d = await api(`/api/seen/clear/${vid}`, "POST");
+  if (d.success) {
+    showToast(`✅ Reset ${d.removed} seen user(s)`);
+    loadSeenCount(vid);
+  } else {
+    showToast("❌ Reset failed");
+  }
+}
+
+// ══ Toast ══════════════════════════════════════════════════════════════════════
+function showToast(msg) {
+  const t = document.createElement("div");
+  t.textContent = msg;
+  Object.assign(t.style, {
+    position:"fixed",bottom:"1.5rem",right:"1.5rem",
+    background:"var(--green)",color:"#fff",
+    padding:".55rem 1.1rem",borderRadius:"8px",
+    fontWeight:"600",fontSize:".83rem",
+    boxShadow:"0 4px 16px rgba(16,185,129,.45)",
+    zIndex:"9999",
+  });
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2500);
+}
+</script>
+</body>
+</html>

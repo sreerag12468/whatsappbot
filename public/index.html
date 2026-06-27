@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp Automation Dashboard</title>
+    <title>Bot Control Center</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -12,1173 +12,447 @@
             --border-glass: rgba(255, 255, 255, 0.08);
             --text-primary: #f3f4f6;
             --text-secondary: #9ca3af;
-            
             --color-connected: #10b981;
             --color-disconnected: #ef4444;
             --color-scanning: #a855f7;
             --color-connecting: #f59e0b;
-            
-            --accent-glow: rgba(99, 102, 241, 0.15);
             --card-radius: 16px;
         }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Outfit', sans-serif;
-        }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
         body {
             background-color: var(--bg-base);
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(168, 85, 247, 0.12) 0px, transparent 50%);
-            color: var(--text-primary);
-            min-height: 100vh;
-            padding: 24px;
-            display: flex;
-            justify-content: center;
+            background-image: radial-gradient(at 0% 0%, rgba(99,102,241,0.15) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(168,85,247,0.12) 0px, transparent 50%);
+            color: var(--text-primary); min-height: 100vh; padding: 24px; display: flex; justify-content: center;
         }
-
-        .container {
-            width: 100%;
-            max-width: 1200px;
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-        }
-
-        /* Header block */
+        .container { width: 100%; max-width: 1200px; display: flex; flex-direction: column; gap: 24px; }
         header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: var(--bg-glass);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--border-glass);
-            border-radius: var(--card-radius);
-            padding: 20px 28px;
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--bg-glass); backdrop-filter: blur(16px); border: 1px solid var(--border-glass);
+            border-radius: var(--card-radius); padding: 20px 28px; box-shadow: 0 8px 32px rgba(0,0,0,0.37);
+            flex-wrap: wrap; gap: 12px;
         }
-
-        .logo-group h1 {
-            font-size: 24px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-            background: linear-gradient(to right, #6366f1, #a855f7);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .logo-group p {
-            font-size: 13px;
-            color: var(--text-secondary);
-            margin-top: 2px;
-        }
-
-        .server-status {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: rgba(255, 255, 255, 0.04);
-            padding: 8px 16px;
-            border-radius: 30px;
-            border: 1px solid var(--border-glass);
-            font-size: 14px;
-            font-weight: 500;
-        }
-
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            display: inline-block;
-            box-shadow: 0 0 10px currentcolor;
-        }
-
+        .logo-group h1 { font-size: 22px; font-weight: 700; background: linear-gradient(to right, #6366f1, #a855f7, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .logo-group p { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+        .server-status { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.04); padding: 8px 16px; border-radius: 30px; border: 1px solid var(--border-glass); font-size: 14px; font-weight: 500; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; box-shadow: 0 0 10px currentcolor; }
         .status-Disconnected .status-dot { background-color: var(--color-disconnected); color: var(--color-disconnected); }
         .status-Connecting .status-dot { background-color: var(--color-connecting); color: var(--color-connecting); }
         .status-Scanning .status-dot { background-color: var(--color-scanning); color: var(--color-scanning); }
         .status-Connected .status-dot { background-color: var(--color-connected); color: var(--color-connected); }
-
-        /* Dashboard Main Grid Layout */
-        .grid {
-            display: grid;
-            grid-template-columns: 380px 1fr;
-            gap: 24px;
-        }
-
-        @media (max-width: 900px) {
-            .grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .card {
-            background: var(--bg-glass);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--border-glass);
-            border-radius: var(--card-radius);
-            padding: 24px;
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            min-width: 0;
-        }
-
-        .card-title {
-            font-size: 18px;
-            font-weight: 600;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border-glass);
-            padding-bottom: 12px;
-        }
-
-        /* QR Code Scanner Panel */
-        .qr-wrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            background: rgba(0, 0, 0, 0.2);
-            border: 1px dashed var(--border-glass);
-            border-radius: 12px;
-            min-height: 280px;
-            padding: 16px;
-            text-align: center;
-        }
-
-        .qr-img {
-            max-width: 240px;
-            width: 100%;
-            border-radius: 8px;
-            background: white;
-            padding: 8px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-        }
-
-        .qr-placeholder-text {
-            color: var(--text-secondary);
-            font-size: 14px;
-            line-height: 1.5;
-        }
-
-        /* Keywords Manager Panel */
-        .btn {
-            background: linear-gradient(to right, #6366f1, #a855f7);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
-        }
-
-        .btn-danger {
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--color-disconnected);
-            border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-
-        .btn-danger:hover {
-            background: var(--color-disconnected);
-            color: white;
-            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
-        }
-
-        .kw-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            max-height: 480px;
-            overflow-y: auto;
-            padding-right: 4px;
-        }
-
-        .kw-item {
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid var(--border-glass);
-            border-radius: 12px;
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            position: relative;
-            transition: all 0.2s ease;
-            min-width: 0;
-        }
-
-        .kw-item:hover {
-            border-color: rgba(99, 102, 241, 0.3);
-            background: rgba(255, 255, 255, 0.04);
-        }
-
-        .kw-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 12px;
-            min-width: 0;
-        }
-
-        .kw-key {
-            font-size: 15px;
-            font-weight: 600;
-            color: #818cf8;
-            background: rgba(99, 102, 241, 0.1);
-            padding: 4px 10px;
-            border-radius: 6px;
-            border: 1px solid rgba(99, 102, 241, 0.2);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .kw-reply {
-            font-size: 13px;
-            color: var(--text-secondary);
-            line-height: 1.5;
-            white-space: pre-wrap;
-            word-break: break-all;
-            overflow-wrap: break-word;
-            background: rgba(0,0,0,0.15);
-            padding: 10px;
-            border-radius: 8px;
-            max-height: 120px;
-            overflow-y: auto;
-        }
-
-        /* Console Logs */
-        .logs-card {
-            grid-column: span 2;
-        }
-
-        @media (max-width: 900px) {
-            .logs-card {
-                grid-column: span 1;
-            }
-        }
-
-        .console {
-            background: #05070c;
-            border: 1px solid var(--border-glass);
-            border-radius: 12px;
-            padding: 16px;
-            font-family: monospace;
-            font-size: 13px;
-            color: #34d399;
-            height: 250px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .log-entry {
-            line-height: 1.4;
-        }
-
-        .log-time {
-            color: var(--text-secondary);
-            margin-right: 8px;
-        }
-
-        /* Form/Modal overlays */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(8px);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-            padding: 16px;
-        }
-
-        .modal.open {
-            display: flex;
-        }
-
-        .modal-content {
-            background: #0f172a;
-            border: 1px solid var(--border-glass);
-            border-radius: var(--card-radius);
-            width: 100%;
-            max-width: 500px;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .form-group label {
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--text-secondary);
-        }
-
-        .form-input {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border-glass);
-            border-radius: 8px;
-            padding: 10px 14px;
-            color: var(--text-primary);
-            font-size: 14px;
-            outline: none;
-            transition: all 0.2s ease;
-        }
-
-        .form-input:focus {
-            border-color: #6366f1;
-            box-shadow: 0 0 10px rgba(99, 102, 241, 0.25);
-        }
-
-        textarea.form-input {
-            height: 180px;
-            resize: none;
-        }
-
-        .modal-footer {
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-            margin-top: 8px;
-        }
+        .tab-nav { display: flex; gap: 4px; background: var(--bg-glass); backdrop-filter: blur(16px); border: 1px solid var(--border-glass); border-radius: var(--card-radius); padding: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+        .tab-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.25s ease; color: var(--text-secondary); background: transparent; font-family: 'Outfit', sans-serif; }
+        .tab-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
+        .tab-btn.active { color: #fff; background: linear-gradient(135deg, #6366f1, #a855f7); box-shadow: 0 4px 20px rgba(99,102,241,0.35); }
+        .tab-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 7px; border-radius: 20px; background: rgba(255,255,255,0.12); }
+        .tab-btn.active .tab-badge { background: rgba(255,255,255,0.2); }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        .yt-iframe-wrapper { background: var(--bg-glass); backdrop-filter: blur(16px); border: 1px solid var(--border-glass); border-radius: var(--card-radius); overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.3); min-height: 90vh; position: relative; }
+        .yt-iframe-wrapper iframe { width: 100%; min-height: 90vh; border: none; display: block; }
+        .yt-loading-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: var(--bg-base); z-index: 10; transition: opacity 0.4s ease; }
+        .yt-loading-overlay.hidden { opacity: 0; pointer-events: none; }
+        .yt-spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.08); border-top-color: #6366f1; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .grid { display: grid; grid-template-columns: 380px 1fr; gap: 24px; }
+        @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+        .card { background: var(--bg-glass); backdrop-filter: blur(16px); border: 1px solid var(--border-glass); border-radius: var(--card-radius); padding: 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+        .card-title { font-size: 18px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-glass); padding-bottom: 12px; }
+        .qr-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.2); border: 1px dashed var(--border-glass); border-radius: 12px; min-height: 280px; padding: 16px; text-align: center; }
+        .qr-img { max-width: 240px; width: 100%; border-radius: 8px; background: white; padding: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        .qr-placeholder-text { color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
+        .btn { background: linear-gradient(to right, #6366f1, #a855f7); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 6px; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(99,102,241,0.4); }
+        .btn-danger { background: rgba(239,68,68,0.1); color: var(--color-disconnected); border: 1px solid rgba(239,68,68,0.2); }
+        .btn-danger:hover { background: var(--color-disconnected); color: white; box-shadow: 0 4px 15px rgba(239,68,68,0.3); }
+        .kw-list { display: flex; flex-direction: column; gap: 12px; max-height: 480px; overflow-y: auto; padding-right: 4px; }
+        .kw-item { background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; transition: all 0.2s ease; min-width: 0; }
+        .kw-item:hover { border-color: rgba(99,102,241,0.3); background: rgba(255,255,255,0.04); }
+        .kw-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-width: 0; }
+        .kw-key { font-size: 15px; font-weight: 600; color: #818cf8; background: rgba(99,102,241,0.1); padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(99,102,241,0.2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .kw-reply { font-size: 13px; color: var(--text-secondary); line-height: 1.5; white-space: pre-wrap; word-break: break-all; background: rgba(0,0,0,0.15); padding: 10px; border-radius: 8px; max-height: 120px; overflow-y: auto; }
+        .logs-card { grid-column: span 2; }
+        @media (max-width: 900px) { .logs-card { grid-column: span 1; } }
+        .console { background: #05070c; border: 1px solid var(--border-glass); border-radius: 12px; padding: 16px; font-family: monospace; font-size: 13px; color: #34d399; height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+        .log-entry { line-height: 1.4; }
+        .log-time { color: var(--text-secondary); margin-right: 8px; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); z-index: 1000; justify-content: center; align-items: center; padding: 16px; }
+        .modal.open { display: flex; }
+        .modal-content { background: #0f172a; border: 1px solid var(--border-glass); border-radius: var(--card-radius); width: 100%; max-width: 500px; padding: 24px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group label { font-size: 14px; font-weight: 500; color: var(--text-secondary); }
+        .form-input { background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px 14px; color: var(--text-primary); font-size: 14px; outline: none; transition: all 0.2s ease; }
+        .form-input:focus { border-color: #6366f1; box-shadow: 0 0 10px rgba(99,102,241,0.25); }
+        textarea.form-input { height: 180px; resize: none; }
+        .modal-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header>
-            <div class="logo-group">
-                <h1>WhatsApp Bot Manager</h1>
-                <p>Baileys Headless Client & Live Web Configurator</p>
-            </div>
-            <div id="status-container" class="server-status status-Disconnected">
-                <span class="status-dot"></span>
-                <span id="status-text">Disconnected</span>
-            </div>
-        </header>
+<div class="container">
+    <header>
+        <div class="logo-group">
+            <h1>&#x1F916; Bot Control Center</h1>
+            <p>WhatsApp Automation + YouTube Auto-Reply &mdash; All in one dashboard</p>
+        </div>
+        <div id="status-container" class="server-status status-Disconnected">
+            <span class="status-dot"></span>
+            <span id="status-text">WA: Disconnected</span>
+        </div>
+    </header>
 
-        <!-- Main Dashboard grid -->
+    <div class="tab-nav">
+        <button id="tab-wa-btn" class="tab-btn active" onclick="switchTab('wa')">
+            &#x1F4AC; WhatsApp Bot <span class="tab-badge">Baileys</span>
+        </button>
+        <button id="tab-yt-btn" class="tab-btn" onclick="switchTab('yt')">
+            &#x1F4FA; YouTube Bot <span class="tab-badge">Auto-Reply</span>
+        </button>
+    </div>
+
+    <div id="tab-wa" class="tab-panel active">
         <div class="grid">
-            <!-- Left Column containing Scanner and DM Sender -->
-            <div style="display: flex; flex-direction: column; gap: 24px;">
-                <!-- Scan Connection -->
+            <div style="display:flex;flex-direction:column;gap:24px">
                 <div class="card">
-                    <div class="card-title">
-                        <span>Scan Connection</span>
-                    </div>
-                    <div id="qr-panel" class="qr-wrapper">
-                        <!-- Dynamic state loader -->
-                    </div>
+                    <div class="card-title"><span>Scan Connection</span></div>
+                    <div id="qr-panel" class="qr-wrapper"></div>
                 </div>
-
-                <!-- Direct Message Sender -->
                 <div class="card">
-                    <div class="card-title">
-                        <span>Direct Message Sender</span>
-                    </div>
+                    <div class="card-title"><span>Direct Message Sender</span></div>
                     <div class="form-group">
                         <label for="dest-number">Recipient Number</label>
                         <input type="text" id="dest-number" class="form-input" placeholder="e.g. 919895138430 or group ID">
                     </div>
                     <div class="form-group">
                         <label for="msg-text">Message Text</label>
-                        <textarea id="msg-text" class="form-input" style="height: 80px;" placeholder="Type your message here..."></textarea>
+                        <textarea id="msg-text" class="form-input" style="height:80px" placeholder="Type your message here..."></textarea>
                     </div>
-                    
-                    <!-- Media Attachments Preview -->
-                    <div style="display: flex; flex-direction: column; gap: 10px;">
-                        <!-- Image Upload field -->
+                    <div style="display:flex;flex-direction:column;gap:10px">
                         <div class="form-group">
                             <label>Attach Image</label>
-                            <input type="file" id="image-input" accept="image/*" onchange="handleImageSelect(event)" style="display: none;">
-                            <div style="display: flex; gap: 8px;">
-                                <button class="btn" style="flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--border-glass);" onclick="document.getElementById('image-input').click()">🖼️ Select Image</button>
-                            </div>
+                            <input type="file" id="image-input" accept="image/*" onchange="handleImageSelect(event)" style="display:none">
+                            <button class="btn" style="background:rgba(255,255,255,0.04);border:1px solid var(--border-glass)" onclick="document.getElementById('image-input').click()">&#x1F5BC; Select Image</button>
                         </div>
-                        
-                        <!-- Image Preview Box -->
-                        <div id="image-preview-container" style="display: none; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.2); border: 1px solid var(--border-glass); border-radius: 8px; padding: 8px;">
-                            <img id="image-preview" style="max-height: 50px; max-width: 80px; border-radius: 4px;" src="" alt="Selected Preview">
-                            <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="removeImage()">Remove</button>
+                        <div id="image-preview-container" style="display:none;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.2);border:1px solid var(--border-glass);border-radius:8px;padding:8px">
+                            <img id="image-preview" style="max-height:50px;max-width:80px;border-radius:4px" src="" alt="Preview">
+                            <button class="btn btn-danger" style="padding:4px 8px;font-size:11px" onclick="removeImage()">Remove</button>
                         </div>
-                        
-                        <!-- Voice Recording Button -->
                         <div class="form-group">
                             <label>Record Voice Message</label>
-                            <div style="display: flex; gap: 8px; align-items: center;">
-                                <button id="record-btn" class="btn" style="flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--border-glass);" onclick="toggleRecording()">🎤 Record Voice Note</button>
-                                <span id="record-timer" style="display: none; color: #ef4444; font-weight: 600; font-size: 14px; min-width: 45px;">00:00</span>
+                            <div style="display:flex;gap:8px;align-items:center">
+                                <button id="record-btn" class="btn" style="flex:1;background:rgba(255,255,255,0.04);border:1px solid var(--border-glass)" onclick="toggleRecording()">&#x1F3A4; Record Voice Note</button>
+                                <span id="record-timer" style="display:none;color:#ef4444;font-weight:600;font-size:14px;min-width:45px">00:00</span>
                             </div>
                         </div>
-                        
-                        <!-- Voice Preview Playback Box -->
-                        <div id="audio-preview-container" style="display: none; flex-direction: column; gap: 6px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px;">
-                            <audio id="audio-playback" controls style="width: 100%; height: 35px;"></audio>
-                            <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px; align-self: flex-end;" onclick="removeVoice()">Remove Voice Note</button>
+                        <div id="audio-preview-container" style="display:none;flex-direction:column;gap:6px;background:rgba(0,0,0,0.2);border:1px solid var(--border-glass);border-radius:8px;padding:10px">
+                            <audio id="audio-playback" controls style="width:100%;height:35px"></audio>
+                            <button class="btn btn-danger" style="padding:4px 8px;font-size:11px;align-self:flex-end" onclick="removeVoice()">Remove Voice Note</button>
                         </div>
                     </div>
-
-                    <button id="send-msg-btn" class="btn" onclick="sendDirectMessage()" style="margin-top: 8px;">🚀 Send Message</button>
+                    <button id="send-msg-btn" class="btn" onclick="sendDirectMessage()" style="margin-top:8px">&#x1F680; Send Message</button>
                 </div>
             </div>
-
-            <!-- Right Panel: Keyword Responder Manager -->
             <div class="card">
                 <div class="card-title">
                     <span>Manage Keyword Rules</span>
                     <button class="btn" onclick="openCreateModal()">+ Add Rule</button>
                 </div>
-                <div style="margin-bottom: 12px;">
-                    <input type="text" id="keyword-search" class="form-input" placeholder="🔍 Search keywords..." oninput="filterKeywords()" style="margin: 0; padding: 10px 14px 10px 36px; width: 100%; box-sizing: border-box;">
+                <div style="margin-bottom:12px">
+                    <input type="text" id="keyword-search" class="form-input" placeholder="&#x1F50D; Search keywords..." oninput="filterKeywords()" style="width:100%">
                 </div>
-                <div id="keywords-list" class="kw-list">
-                    <!-- Dynamic keyword entries -->
-                </div>
+                <div id="keywords-list" class="kw-list"></div>
             </div>
-
-            <!-- Bottom Panel: Console logs -->
             <div class="card logs-card">
-                <div class="card-title">
-                    <span>Live Connection Logs</span>
-                </div>
-                <div id="console-logs" class="console">
-                    <!-- Dynamic socket logs -->
-                </div>
+                <div class="card-title"><span>Live Connection Logs</span></div>
+                <div id="console-logs" class="console"></div>
             </div>
         </div>
     </div>
 
-    <!-- Keyword Edit/Create Modal -->
-    <div id="rule-modal" class="modal">
-        <div class="modal-content">
-            <h3 id="modal-title" style="font-size: 20px; font-weight: 600; margin-bottom: 4px;">Create Responder Rule</h3>
+    <div id="tab-yt" class="tab-panel">
+        <div class="yt-iframe-wrapper">
+            <div id="yt-loading" class="yt-loading-overlay">
+                <div class="yt-spinner"></div>
+                <div style="color:var(--text-secondary);font-size:14px">Loading YouTube Bot...</div>
+            </div>
+            <iframe id="yt-iframe" src="about:blank" data-src="/yt/" title="YouTube Auto-Reply Bot" onload="onYTIframeLoad()" allow="clipboard-write"></iframe>
+        </div>
+    </div>
+</div>
+
+<div id="rule-modal" class="modal">
+    <div class="modal-content">
+        <h3 id="modal-title" style="font-size:20px;font-weight:600;margin-bottom:4px">Create Responder Rule</h3>
+        <div class="form-group"><label for="kw-input">Trigger Keyword</label><input type="text" id="kw-input" class="form-input" placeholder="e.g. printer"></div>
+        <div class="form-group"><label for="reply-input">Automatic Response Text</label><textarea id="reply-input" class="form-input" style="height:100px" placeholder="Enter message text..."></textarea></div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
             <div class="form-group">
-                <label for="kw-input">Trigger Keyword</label>
-                <input type="text" id="kw-input" class="form-input" placeholder="e.g. printer">
+                <label>Attach Image</label>
+                <input type="file" id="rule-image-input" accept="image/*" onchange="handleRuleImageSelect(event)" style="display:none">
+                <button class="btn" style="background:rgba(255,255,255,0.04);border:1px solid var(--border-glass)" onclick="document.getElementById('rule-image-input').click()">&#x1F5BC; Select Image</button>
+                <div id="rule-image-preview-container" style="display:none;align-items:center;justify-content:space-between;background:rgba(0,0,0,0.2);border:1px solid var(--border-glass);border-radius:8px;padding:8px;margin-top:6px">
+                    <img id="rule-image-preview" style="max-height:45px;max-width:70px;border-radius:4px" src="" alt="Preview">
+                    <button class="btn btn-danger" style="padding:4px 8px;font-size:11px" onclick="removeRuleImage()">Remove</button>
+                </div>
             </div>
             <div class="form-group">
-                <label for="reply-input">Automatic Response Text</label>
-                <textarea id="reply-input" class="form-input" style="height: 100px;" placeholder="Enter message text..."></textarea>
-            </div>
-            
-            <!-- Attachment fields for the Rule -->
-            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 4px;">
-                <!-- Rule Image -->
-                <div class="form-group">
-                    <label>Attach Image</label>
-                    <input type="file" id="rule-image-input" accept="image/*" onchange="handleRuleImageSelect(event)" style="display: none;">
-                    <button class="btn" style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-glass);" onclick="document.getElementById('rule-image-input').click()">🖼️ Select Image</button>
-                    
-                    <!-- Rule Image Preview Box -->
-                    <div id="rule-image-preview-container" style="display: none; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.2); border: 1px solid var(--border-glass); border-radius: 8px; padding: 8px; margin-top: 6px;">
-                        <img id="rule-image-preview" style="max-height: 45px; max-width: 70px; border-radius: 4px;" src="" alt="Selected Preview">
-                        <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px;" onclick="removeRuleImage()">Remove</button>
-                    </div>
+                <label>Record Voice Message</label>
+                <div style="display:flex;gap:8px;align-items:center">
+                    <button id="rule-record-btn" class="btn" style="flex:1;background:rgba(255,255,255,0.04);border:1px solid var(--border-glass)" onclick="toggleRuleRecording()">&#x1F3A4; Record Voice Note</button>
+                    <span id="rule-record-timer" style="display:none;color:#ef4444;font-weight:600;font-size:14px;min-width:45px">00:00</span>
                 </div>
-
-                <!-- Rule Voice Note -->
-                <div class="form-group">
-                    <label>Record Voice Message</label>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <button id="rule-record-btn" class="btn" style="flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--border-glass);" onclick="toggleRuleRecording()">🎤 Record Voice Note</button>
-                        <span id="rule-record-timer" style="display: none; color: #ef4444; font-weight: 600; font-size: 14px; min-width: 45px;">00:00</span>
-                    </div>
-                    
-                    <!-- Rule Voice Playback Box -->
-                    <div id="rule-audio-preview-container" style="display: none; flex-direction: column; gap: 6px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px; margin-top: 6px;">
-                        <audio id="rule-audio-playback" controls style="width: 100%; height: 35px;"></audio>
-                        <button class="btn btn-danger" style="padding: 4px 8px; font-size: 11px; align-self: flex-end;" onclick="removeRuleVoice()">Remove Voice Note</button>
-                    </div>
+                <div id="rule-audio-preview-container" style="display:none;flex-direction:column;gap:6px;background:rgba(0,0,0,0.2);border:1px solid var(--border-glass);border-radius:8px;padding:10px;margin-top:6px">
+                    <audio id="rule-audio-playback" controls style="width:100%;height:35px"></audio>
+                    <button class="btn btn-danger" style="padding:4px 8px;font-size:11px;align-self:flex-end" onclick="removeRuleVoice()">Remove Voice Note</button>
                 </div>
             </div>
-
-            <div class="modal-footer" style="margin-top: 12px;">
-                <button class="btn btn-danger" onclick="closeModal()">Cancel</button>
-                <button class="btn" onclick="saveRule()">Save Rule</button>
-            </div>
+        </div>
+        <div class="modal-footer" style="margin-top:12px">
+            <button class="btn btn-danger" onclick="closeModal()">Cancel</button>
+            <button class="btn" onclick="saveRule()">Save Rule</button>
         </div>
     </div>
+</div>
 
-    <!-- Confirmation Dialog Modal -->
-    <div id="confirm-modal" class="modal">
-        <div class="modal-content" style="max-width: 400px; text-align: center; gap: 20px;">
-            <div style="font-size: 40px; color: var(--color-disconnected);">⚠️</div>
-            <h3 style="font-size: 20px; font-weight: 600;">Delete Responder Rule</h3>
-            <p id="confirm-message" style="color: var(--text-secondary); font-size: 14px; line-height: 1.5;"></p>
-            <div class="modal-footer" style="justify-content: center; gap: 16px;">
-                <button class="btn" style="background: rgba(255,255,255,0.06); border: 1px solid var(--border-glass); color: var(--text-primary);" onclick="closeConfirmModal()">Cancel</button>
-                <button id="confirm-delete-btn" class="btn btn-danger">Yes, Delete</button>
-            </div>
+<div id="confirm-modal" class="modal">
+    <div class="modal-content" style="max-width:400px;text-align:center;gap:20px">
+        <div style="font-size:40px;color:var(--color-disconnected)">&#x26A0;&#xFE0F;</div>
+        <h3 style="font-size:20px;font-weight:600">Delete Responder Rule</h3>
+        <p id="confirm-message" style="color:var(--text-secondary);font-size:14px;line-height:1.5"></p>
+        <div class="modal-footer" style="justify-content:center;gap:16px">
+            <button class="btn" style="background:rgba(255,255,255,0.06);border:1px solid var(--border-glass);color:var(--text-primary)" onclick="closeConfirmModal()">Cancel</button>
+            <button id="confirm-delete-btn" class="btn btn-danger">Yes, Delete</button>
         </div>
     </div>
+</div>
 
-    <!-- Load Socket.io -->
-    <script src="/socket.io/socket.io.js"></script>
-    <script>
-        const socket = io();
-        let currentKeywords = {};
+<script src="/socket.io/socket.io.js"></script>
+<script>
+let ytIframeLoaded = false;
+function switchTab(tab) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    document.getElementById('tab-' + tab + '-btn').classList.add('active');
+    if (tab === 'yt' && !ytIframeLoaded) {
+        const iframe = document.getElementById('yt-iframe');
+        iframe.src = iframe.dataset.src;
+        ytIframeLoaded = true;
+    }
+}
+function onYTIframeLoad() {
+    const overlay = document.getElementById('yt-loading');
+    if (overlay) { overlay.classList.add('hidden'); setTimeout(() => overlay.style.display = 'none', 400); }
+}
 
-        // 1. Connection Status Manager
-        async function logoutAndRescan() {
-            if (!confirm('This will disconnect WhatsApp and generate a new QR code. Continue?')) return;
-            try {
-                const res = await fetch('/api/logout', { method: 'POST' });
-                const data = await res.json();
-                alert(data.message || 'Logged out. Please scan the new QR code.');
-            } catch(e) {
-                alert('Logout request failed: ' + e.message);
-            }
-        }
+const socket = io();
+let currentKeywords = {};
 
-        // Session management
-        async function exportSession() {
-            try {
-                const res = await fetch('/api/export-session', { method: 'POST' });
-                const data = await res.json();
-                if (!data.success) return alert('Export failed: ' + data.message);
-                // Download as file
-                const a = document.createElement('a');
-                a.href = 'data:text/plain;base64,' + btoa(data.session);
-                a.download = 'wa_session_backup.txt';
-                a.click();
-                alert('Session saved! Keep wa_session_backup.txt safe. Use Import to restore it after Railway restarts.');
-            } catch(e) { alert('Export error: ' + e.message); }
-        }
+async function logoutAndRescan() {
+    if (!confirm('This will disconnect WhatsApp and generate a new QR code. Continue?')) return;
+    try { const res = await fetch('/api/logout', { method: 'POST' }); const data = await res.json(); alert(data.message || 'Logged out.'); }
+    catch(e) { alert('Logout failed: ' + e.message); }
+}
+async function exportSession() {
+    try {
+        const res = await fetch('/api/export-session', { method: 'POST' }); const data = await res.json();
+        if (!data.success) return alert('Export failed: ' + data.message);
+        const a = document.createElement('a'); a.href = 'data:text/plain;base64,' + btoa(data.session); a.download = 'wa_session_backup.txt'; a.click();
+        alert('Session saved! Keep wa_session_backup.txt safe.');
+    } catch(e) { alert('Export error: ' + e.message); }
+}
+async function importSession() {
+    const input = document.createElement('input'); input.type = 'file'; input.accept = '.txt';
+    input.onchange = async (e) => {
+        const file = e.target.files[0]; if (!file) return;
+        const text = await file.text(); const session = atob(text.trim());
+        const res = await fetch('/api/import-session', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ session }) });
+        const data = await res.json(); alert(data.message || (data.success ? 'Session imported!' : 'Import failed'));
+    };
+    input.click();
+}
 
-        async function importSession() {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.txt';
-            input.onchange = async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const text = await file.text();
-                const session = atob(text.trim());
-                const res = await fetch('/api/import-session', {
-                    method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ session })
-                });
-                const data = await res.json();
-                alert(data.message || (data.success ? 'Session imported!' : 'Import failed'));
-            };
-            input.click();
-        }
+socket.on('status', (data) => {
+    const container = document.getElementById('status-container');
+    const text = document.getElementById('status-text');
+    container.className = 'server-status status-' + data.status;
+    text.textContent = 'WA: ' + data.status;
+    const qrPanel = document.getElementById('qr-panel');
+    if (data.status === 'Connected') {
+        qrPanel.innerHTML = '<div style="color:var(--color-connected);font-size:40px;margin-bottom:12px">&#x2713;</div><div style="font-weight:600;font-size:16px">WhatsApp Connected</div><div style="color:var(--text-secondary);font-size:13px;margin-top:4px">Bot is active and listening for messages.</div><div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;justify-content:center"><button onclick="exportSession()" style="padding:10px 18px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">&#x1F4BE; Save Session</button><button onclick="logoutAndRescan()" style="padding:10px 18px;background:linear-gradient(135deg,#ef4444,#b91c1c);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer">&#x21BB; Logout &amp; Re-scan</button></div><div style="color:var(--text-secondary);font-size:11px;margin-top:8px">Save Session = backup login. Re-scan = fix if replies stop.</div>';
+    } else if (data.status === 'Connecting') {
+        qrPanel.innerHTML = '<div style="color:var(--color-connecting);font-size:14px" class="qr-placeholder-text">Connecting to WhatsApp Web services...</div>';
+    } else if (data.status === 'Disconnected') {
+        qrPanel.innerHTML = '<div class="qr-placeholder-text">Authentication disconnected.<br>Waiting for QR code generation...</div>';
+    }
+});
+socket.on('qr', (data) => {
+    const qrPanel = document.getElementById('qr-panel');
+    if (data.qr) { qrPanel.innerHTML = '<img class="qr-img" src="' + data.qr + '" alt="WhatsApp QR Code"><div style="font-weight:500;font-size:13px;margin-top:12px;color:var(--text-secondary)">Scan this QR code using WhatsApp on your phone.</div>'; }
+});
 
-        socket.on('status', (data) => {
-            const container = document.getElementById('status-container');
-            const text = document.getElementById('status-text');
-            
-            container.className = `server-status status-${data.status}`;
-            text.textContent = data.status;
+function renderKeywords(data) {
+    const container = document.getElementById('keywords-list'); container.innerHTML = '';
+    const searchVal = (document.getElementById('keyword-search')?.value || '').trim().toLowerCase();
+    const keys = Object.keys(data).filter(k => k.toLowerCase().includes(searchVal));
+    if (keys.length === 0) {
+        container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);padding:40px;border:1px dashed var(--border-glass);border-radius:12px">' + (searchVal ? 'No rules matching &quot;' + searchVal + '&quot; found.' : 'No responder rules configured yet. Click &quot;+ Add Rule&quot; to get started.') + '</div>';
+        return;
+    }
+    keys.forEach(k => {
+        const item = document.createElement('div'); item.className = 'kw-item';
+        const escapedKey = k.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        const rule = typeof data[k] === 'string' ? { text: data[k], image: null, voice: null } : data[k];
+        const hasImage = rule.image ? '<span style="color:#818cf8;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:4px;background:rgba(99,102,241,0.1);padding:2px 8px;border-radius:4px;border:1px solid rgba(99,102,241,0.2)">&#x1F5BC; Image</span>' : '';
+        const hasVoice = rule.voice ? '<span style="color:#a78bfa;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:4px;background:rgba(168,85,247,0.1);padding:2px 8px;border-radius:4px;border:1px solid rgba(168,85,247,0.2)">&#x1F3A4; Voice</span>' : '';
+        const textContent = rule.text || '';
+        const escapedReply = textContent.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+        item.innerHTML = '<div class="kw-header"><span class="kw-key">' + k + '</span><div style="display:flex;gap:8px"><button class="btn" style="padding:6px 12px;font-size:12px" onclick="openEditModal(\'' + escapedKey + '\')">Edit</button><button class="btn btn-danger" style="padding:6px 12px;font-size:12px" onclick="openConfirmModal(\'' + escapedKey + '\')">Delete</button></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">' + hasImage + hasVoice + '</div>' + (escapedReply ? '<div class="kw-reply">' + escapedReply + '</div>' : '');
+        container.appendChild(item);
+    });
+}
+socket.on('keywords', (data) => { currentKeywords = data; renderKeywords(data); });
+function filterKeywords() { renderKeywords(currentKeywords); }
 
-            const qrPanel = document.getElementById('qr-panel');
-            if (data.status === 'Connected') {
-                qrPanel.innerHTML = `
-                    <div style="color: var(--color-connected); font-size: 40px; margin-bottom: 12px;">✓</div>
-                    <div style="font-weight: 600; font-size: 16px;">WhatsApp Connected</div>
-                    <div style="color: var(--text-secondary); font-size: 13px; margin-top: 4px;">Bot is active and listening for incoming messages.</div>
-                    <div style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; justify-content:center;">
-                        <button onclick="exportSession()" style="padding: 10px 18px; background: linear-gradient(135deg, #6366f1, #4f46e5); color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;">💾 Save Session</button>
-                        <button onclick="logoutAndRescan()" style="padding: 10px 18px; background: linear-gradient(135deg, #ef4444, #b91c1c); color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;">⟳ Logout &amp; Re-scan</button>
-                    </div>
-                    <div style="color: var(--text-secondary); font-size: 11px; margin-top: 8px;">Save Session = backup your login. Re-scan = fix if replies stop working.</div>
-                `;
-            } else if (data.status === 'Connecting') {
-                qrPanel.innerHTML = `
-                    <div style="color: var(--color-connecting); font-size: 14px;" class="qr-placeholder-text">
-                        Connecting to WhatsApp Web services...
-                    </div>
-                `;
-            } else if (data.status === 'Disconnected') {
-                qrPanel.innerHTML = `
-                    <div class="qr-placeholder-text">
-                        Authentication disconnected.<br>
-                        Waiting for QR code generation...
-                    </div>
-                `;
-            }
-        });
+const consoleLogs = document.getElementById('console-logs');
+function appendLog(logItem) {
+    const entry = document.createElement('div'); entry.className = 'log-entry';
+    entry.innerHTML = '<span class="log-time">[' + logItem.time + ']</span>' + logItem.text;
+    consoleLogs.appendChild(entry); consoleLogs.scrollTop = consoleLogs.scrollHeight;
+}
+socket.on('logs-init', (data) => { consoleLogs.innerHTML = ''; data.forEach(item => appendLog(item)); });
+socket.on('log', (data) => { appendLog(data); });
 
-        // 2. QR Code Loader
-        socket.on('qr', (data) => {
-            const qrPanel = document.getElementById('qr-panel');
-            if (data.qr) {
-                qrPanel.innerHTML = `
-                    <img class="qr-img" src="${data.qr}" alt="WhatsApp Web QR Code">
-                    <div style="font-weight: 500; font-size: 13px; margin-top: 12px; color: var(--text-secondary);">
-                        Scan this QR code using WhatsApp on your phone to link device.
-                    </div>
-                `;
-            }
-        });
+let editingKey = null, ruleImageBase64 = null, ruleVoiceBase64 = null, ruleMediaRecorder = null;
+let ruleAudioChunks = [], ruleRecordingTimer = null, ruleRecordingSeconds = 0;
 
-        function renderKeywords(data) {
-            const container = document.getElementById('keywords-list');
-            container.innerHTML = '';
+function resizeAndConvertImage(file, callback) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            const maxDim = 1024; let w = img.naturalWidth, h = img.naturalHeight;
+            if (w > maxDim || h > maxDim) { if (w > h) { h = Math.round(h*maxDim/w); w = maxDim; } else { w = Math.round(w*maxDim/h); h = maxDim; } }
+            const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+            callback(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
 
-            const searchVal = (document.getElementById('keyword-search')?.value || '').trim().toLowerCase();
-            const keys = Object.keys(data).filter(k => k.toLowerCase().includes(searchVal));
-            
-            if (keys.length === 0) {
-                if (searchVal) {
-                    container.innerHTML = `
-                        <div style="text-align: center; color: var(--text-secondary); padding: 40px; border: 1px dashed var(--border-glass); border-radius: 12px;">
-                            No rules matching "${searchVal}" found.
-                        </div>
-                    `;
-                } else {
-                    container.innerHTML = `
-                        <div style="text-align: center; color: var(--text-secondary); padding: 40px; border: 1px dashed var(--border-glass); border-radius: 12px;">
-                            No responder rules configured yet. Click "+ Add Rule" to get started.
-                        </div>
-                    `;
-                }
-                return;
-            }
+function handleRuleImageSelect(event) {
+    const file = event.target.files[0];
+    const pc = document.getElementById('rule-image-preview-container');
+    const pi = document.getElementById('rule-image-preview');
+    if (!file) { ruleImageBase64 = null; pc.style.display = 'none'; return; }
+    resizeAndConvertImage(file, (b64) => { ruleImageBase64 = b64; pi.src = b64; pc.style.display = 'flex'; });
+}
+function removeRuleImage() { ruleImageBase64 = null; document.getElementById('rule-image-input').value = ''; document.getElementById('rule-image-preview-container').style.display = 'none'; }
 
-            keys.forEach(k => {
-                const item = document.createElement('div');
-                item.className = 'kw-item';
-                
-                const escapedKey = k.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                const rule = typeof data[k] === 'string'
-                    ? { text: data[k], image: null, voice: null }
-                    : data[k];
+async function toggleRuleRecording() {
+    const btn = document.getElementById('rule-record-btn'); const timer = document.getElementById('rule-record-timer');
+    const preview = document.getElementById('rule-audio-preview-container');
+    if (ruleMediaRecorder && ruleMediaRecorder.state === 'recording') { ruleMediaRecorder.stop(); clearInterval(ruleRecordingTimer); btn.innerHTML = '&#x1F3A4; Record Voice Note'; btn.className = 'btn'; return; }
+    ruleAudioChunks = []; ruleVoiceBase64 = null; document.getElementById('rule-audio-playback').src = ''; preview.style.display = 'none';
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        let opts = { mimeType: 'audio/webm' };
+        if (!MediaRecorder.isTypeSupported(opts.mimeType)) opts = { mimeType: 'audio/ogg' };
+        if (!MediaRecorder.isTypeSupported(opts.mimeType)) opts = { mimeType: 'audio/mp4' };
+        ruleMediaRecorder = new MediaRecorder(stream, opts);
+        ruleMediaRecorder.ondataavailable = e => { if (e.data.size > 0) ruleAudioChunks.push(e.data); };
+        ruleMediaRecorder.onstop = () => {
+            const blob = new Blob(ruleAudioChunks, { type: ruleMediaRecorder.mimeType });
+            const reader = new FileReader(); reader.readAsDataURL(blob);
+            reader.onloadend = () => { ruleVoiceBase64 = reader.result; document.getElementById('rule-audio-playback').src = URL.createObjectURL(blob); preview.style.display = 'flex'; };
+            stream.getTracks().forEach(t => t.stop());
+        };
+        ruleMediaRecorder.start(); ruleRecordingSeconds = 0; timer.textContent = '00:00'; timer.style.display = 'inline';
+        btn.innerHTML = '&#x23F9;&#xFE0F; Stop Recording'; btn.className = 'btn btn-danger';
+        ruleRecordingTimer = setInterval(() => { ruleRecordingSeconds++; timer.textContent = String(Math.floor(ruleRecordingSeconds/60)).padStart(2,'0') + ':' + String(ruleRecordingSeconds%60).padStart(2,'0'); }, 1000);
+    } catch(err) { alert('Failed to access microphone: ' + err.message); }
+}
+function removeRuleVoice() { ruleVoiceBase64 = null; document.getElementById('rule-audio-playback').src = ''; document.getElementById('rule-audio-preview-container').style.display = 'none'; document.getElementById('rule-record-timer').style.display = 'none'; const btn = document.getElementById('rule-record-btn'); btn.innerHTML = '&#x1F3A4; Record Voice Note'; btn.className = 'btn'; }
 
-                const hasImage = rule.image ? `<span style="color: #818cf8; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; background: rgba(99, 102, 241, 0.1); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(99,102,241,0.2);">🖼️ Image</span>` : '';
-                const hasVoice = rule.voice ? `<span style="color: #a78bfa; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; background: rgba(168, 85, 247, 0.1); padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(168,85,247,0.2);">🎤 Voice Note</span>` : '';
-                
-                const textContent = rule.text || '';
-                const escapedReply = textContent
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/'/g, '&#039;');
-                
-                item.innerHTML = `
-                    <div class="kw-header">
-                        <span class="kw-key">${k}</span>
-                        <div style="display: flex; gap: 8px;">
-                            <button class="btn" style="padding: 6px 12px; font-size: 12px;" onclick="openEditModal('${escapedKey}')">Edit</button>
-                            <button class="btn btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="openConfirmModal('${escapedKey}')">Delete</button>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px;">
-                        ${hasImage}
-                        ${hasVoice}
-                    </div>
-                    ${escapedReply ? `<div class="kw-reply">${escapedReply}</div>` : ''}
-                `;
-                container.appendChild(item);
-            });
-        }
+function openCreateModal() { editingKey = null; document.getElementById('modal-title').textContent = 'Create Responder Rule'; document.getElementById('kw-input').value = ''; document.getElementById('kw-input').disabled = false; document.getElementById('reply-input').value = ''; removeRuleImage(); removeRuleVoice(); document.getElementById('rule-modal').classList.add('open'); }
+function openEditModal(key) {
+    editingKey = key; document.getElementById('modal-title').textContent = 'Edit Responder Rule'; document.getElementById('kw-input').value = key; document.getElementById('kw-input').disabled = false;
+    const rule = typeof currentKeywords[key] === 'string' ? { text: currentKeywords[key], image: null, voice: null } : currentKeywords[key];
+    document.getElementById('reply-input').value = rule.text || '';
+    if (rule.image) { ruleImageBase64 = rule.image; document.getElementById('rule-image-preview').src = ruleImageBase64; document.getElementById('rule-image-preview-container').style.display = 'flex'; } else { removeRuleImage(); }
+    if (rule.voice) { ruleVoiceBase64 = rule.voice; document.getElementById('rule-audio-playback').src = rule.voice; document.getElementById('rule-audio-preview-container').style.display = 'flex'; } else { removeRuleVoice(); }
+    document.getElementById('rule-modal').classList.add('open');
+}
+function closeModal() { document.getElementById('rule-modal').classList.remove('open'); if (ruleMediaRecorder && ruleMediaRecorder.state === 'recording') { ruleMediaRecorder.stop(); clearInterval(ruleRecordingTimer); } }
 
-        // 3. Keyword Config Renderer
-        socket.on('keywords', (data) => {
-            currentKeywords = data;
-            renderKeywords(data);
-        });
+async function saveRule() {
+    const key = document.getElementById('kw-input').value.trim().toLowerCase();
+    const reply = document.getElementById('reply-input').value.trim();
+    if (!key) { alert('Trigger keyword is required.'); return; }
+    if (!reply && !ruleImageBase64 && !ruleVoiceBase64) { alert('Please enter response text, select an image, or record a voice note.'); return; }
+    try {
+        if (editingKey && editingKey !== key) { await fetch('/api/keywords/delete-rule', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ key: editingKey }) }); delete currentKeywords[editingKey]; }
+        const res = await fetch('/api/keywords/save-rule', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ key, rule: { text: reply || null, image: ruleImageBase64 || null, voice: ruleVoiceBase64 || null } }) });
+        const data = await res.json();
+        if (data.success) { currentKeywords[key] = { text: reply || null, image: ruleImageBase64 || null, voice: ruleVoiceBase64 || null }; closeModal(); }
+        else { alert('Error saving rule: ' + data.message); }
+    } catch(err) { alert('Network error: ' + err.message); }
+}
 
-        function filterKeywords() {
-            renderKeywords(currentKeywords);
-        }
+let keyToDelete = null;
+function openConfirmModal(key) { keyToDelete = key; document.getElementById('confirm-message').textContent = 'Are you sure you want to delete the responder rule for keyword "' + key + '"?'; document.getElementById('confirm-delete-btn').onclick = executeDelete; document.getElementById('confirm-modal').classList.add('open'); }
+function closeConfirmModal() { document.getElementById('confirm-modal').classList.remove('open'); keyToDelete = null; }
+async function executeDelete() {
+    if (!keyToDelete) return; const key = keyToDelete; closeConfirmModal();
+    try { const res = await fetch('/api/keywords/delete-rule', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ key }) }); const data = await res.json(); if (data.success) { delete currentKeywords[key]; } else { alert('Error deleting: ' + data.message); } }
+    catch(err) { alert('Network error: ' + err.message); }
+}
 
-        // 4. Live Logger
-        const consoleLogs = document.getElementById('console-logs');
+let mediaRecorder = null, audioChunks = [], voiceBase64 = null, recordingTimer = null, recordingSeconds = 0, imageBase64 = null;
+function handleImageSelect(event) {
+    const file = event.target.files[0]; const pc = document.getElementById('image-preview-container'); const pi = document.getElementById('image-preview');
+    if (!file) { imageBase64 = null; pc.style.display = 'none'; return; }
+    resizeAndConvertImage(file, (b64) => { imageBase64 = b64; pi.src = b64; pc.style.display = 'flex'; });
+}
+function removeImage() { imageBase64 = null; document.getElementById('image-input').value = ''; document.getElementById('image-preview-container').style.display = 'none'; }
 
-        function appendLog(logItem) {
-            const entry = document.createElement('div');
-            entry.className = 'log-entry';
-            entry.innerHTML = `<span class="log-time">[${logItem.time}]</span>${logItem.text}`;
-            consoleLogs.appendChild(entry);
-            consoleLogs.scrollTop = consoleLogs.scrollHeight;
-        }
+async function toggleRecording() {
+    const btn = document.getElementById('record-btn'); const timer = document.getElementById('record-timer'); const preview = document.getElementById('audio-preview-container');
+    if (mediaRecorder && mediaRecorder.state === 'recording') { mediaRecorder.stop(); clearInterval(recordingTimer); btn.innerHTML = '&#x1F3A4; Record Voice Note'; btn.className = 'btn'; return; }
+    audioChunks = []; voiceBase64 = null; document.getElementById('audio-playback').src = ''; preview.style.display = 'none';
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        let opts = { mimeType: 'audio/webm' };
+        if (!MediaRecorder.isTypeSupported(opts.mimeType)) opts = { mimeType: 'audio/ogg' };
+        if (!MediaRecorder.isTypeSupported(opts.mimeType)) opts = { mimeType: 'audio/mp4' };
+        mediaRecorder = new MediaRecorder(stream, opts);
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+            const reader = new FileReader(); reader.readAsDataURL(blob);
+            reader.onloadend = () => { voiceBase64 = reader.result; document.getElementById('audio-playback').src = URL.createObjectURL(blob); preview.style.display = 'flex'; };
+            stream.getTracks().forEach(t => t.stop());
+        };
+        mediaRecorder.start(); recordingSeconds = 0; timer.textContent = '00:00'; timer.style.display = 'inline';
+        btn.innerHTML = '&#x23F9;&#xFE0F; Stop Recording'; btn.className = 'btn btn-danger';
+        recordingTimer = setInterval(() => { recordingSeconds++; timer.textContent = String(Math.floor(recordingSeconds/60)).padStart(2,'0') + ':' + String(recordingSeconds%60).padStart(2,'0'); }, 1000);
+    } catch(err) { alert('Failed to access microphone: ' + err.message); }
+}
+function removeVoice() { voiceBase64 = null; document.getElementById('audio-playback').src = ''; document.getElementById('audio-preview-container').style.display = 'none'; document.getElementById('record-timer').style.display = 'none'; }
 
-        socket.on('logs-init', (data) => {
-            consoleLogs.innerHTML = '';
-            data.forEach(item => appendLog(item));
-        });
-
-        socket.on('log', (data) => {
-            appendLog(data);
-        });
-
-        // 5. CRUD Modal interactions
-        let editingKey = null;
-        let ruleImageBase64 = null;
-        let ruleVoiceBase64 = null;
-        let ruleMediaRecorder = null;
-        let ruleAudioChunks = [];
-        let ruleRecordingTimer = null;
-        let ruleRecordingSeconds = 0;
-
-        function resizeAndConvertImage(file, callback) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const maxDim = 1024;
-                    let width = img.naturalWidth;
-                    let height = img.naturalHeight;
-                    
-                    if (width > maxDim || height > maxDim) {
-                        if (width > height) {
-                            height = Math.round((height * maxDim) / width);
-                            width = maxDim;
-                        } else {
-                            width = Math.round((width * maxDim) / height);
-                            height = maxDim;
-                        }
-                    }
-                    
-                    const canvas = document.createElement('canvas');
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    
-                    // Export to highly-compatible jpeg at 0.8 quality
-                    const base64 = canvas.toDataURL('image/jpeg', 0.8);
-                    callback(base64);
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-
-        function handleRuleImageSelect(event) {
-            const file = event.target.files[0];
-            const previewContainer = document.getElementById('rule-image-preview-container');
-            const previewImg = document.getElementById('rule-image-preview');
-            
-            if (!file) {
-                ruleImageBase64 = null;
-                previewContainer.style.display = "none";
-                return;
-            }
-            
-            resizeAndConvertImage(file, (base64) => {
-                ruleImageBase64 = base64;
-                previewImg.src = base64;
-                previewContainer.style.display = "flex";
-            });
-        }
-
-        function removeRuleImage() {
-            ruleImageBase64 = null;
-            document.getElementById('rule-image-input').value = "";
-            document.getElementById('rule-image-preview-container').style.display = "none";
-        }
-
-        async function toggleRuleRecording() {
-            const recordBtn = document.getElementById('rule-record-btn');
-            const timerSpan = document.getElementById('rule-record-timer');
-            const audioPreview = document.getElementById('rule-audio-preview-container');
-            
-            if (ruleMediaRecorder && ruleMediaRecorder.state === "recording") {
-                ruleMediaRecorder.stop();
-                clearInterval(ruleRecordingTimer);
-                recordBtn.innerHTML = "🎤 Record Voice Note";
-                recordBtn.className = "btn";
-                return;
-            }
-            
-            ruleAudioChunks = [];
-            ruleVoiceBase64 = null;
-            document.getElementById('rule-audio-playback').src = "";
-            audioPreview.style.display = "none";
-            
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                
-                let options = { mimeType: 'audio/webm' };
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    options = { mimeType: 'audio/ogg' };
-                }
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    options = { mimeType: 'audio/mp4' };
-                }
-                
-                ruleMediaRecorder = new MediaRecorder(stream, options);
-                ruleMediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        ruleAudioChunks.push(event.data);
-                    }
-                };
-                
-                ruleMediaRecorder.onstop = () => {
-                    const audioBlob = new Blob(ruleAudioChunks, { type: ruleMediaRecorder.mimeType });
-                    const reader = new FileReader();
-                    reader.readAsDataURL(audioBlob);
-                    reader.onloadend = () => {
-                        ruleVoiceBase64 = reader.result;
-                        document.getElementById('rule-audio-playback').src = URL.createObjectURL(audioBlob);
-                        audioPreview.style.display = "flex";
-                    };
-                    stream.getTracks().forEach(track => track.stop());
-                };
-                
-                ruleMediaRecorder.start();
-                ruleRecordingSeconds = 0;
-                timerSpan.textContent = "00:00";
-                timerSpan.style.display = "inline";
-                
-                recordBtn.innerHTML = "⏹️ Stop Recording";
-                recordBtn.className = "btn btn-danger";
-                
-                ruleRecordingTimer = setInterval(() => {
-                    ruleRecordingSeconds++;
-                    const mins = String(Math.floor(ruleRecordingSeconds / 60)).padStart(2, '0');
-                    const secs = String(ruleRecordingSeconds % 60).padStart(2, '0');
-                    timerSpan.textContent = `${mins}:${secs}`;
-                }, 1000);
-            } catch (err) {
-                alert("Failed to access microphone: " + err.message);
-            }
-        }
-
-        function removeRuleVoice() {
-            ruleVoiceBase64 = null;
-            document.getElementById('rule-audio-playback').src = "";
-            document.getElementById('rule-audio-preview-container').style.display = "none";
-            document.getElementById('rule-record-timer').style.display = "none";
-            const recordBtn = document.getElementById('rule-record-btn');
-            recordBtn.innerHTML = "🎤 Record Voice Note";
-            recordBtn.className = "btn";
-        }
-
-        function openCreateModal() {
-            editingKey = null;
-            document.getElementById('modal-title').textContent = 'Create Responder Rule';
-            document.getElementById('kw-input').value = '';
-            document.getElementById('kw-input').disabled = false;
-            document.getElementById('reply-input').value = '';
-            removeRuleImage();
-            removeRuleVoice();
-            document.getElementById('rule-modal').classList.add('open');
-        }
-
-        function openEditModal(key) {
-            editingKey = key;
-            document.getElementById('modal-title').textContent = 'Edit Responder Rule';
-            document.getElementById('kw-input').value = key;
-            document.getElementById('kw-input').disabled = false; // Allow editing the trigger keyword
-            
-            const rule = typeof currentKeywords[key] === 'string'
-                ? { text: currentKeywords[key], image: null, voice: null }
-                : currentKeywords[key];
-                
-            document.getElementById('reply-input').value = rule.text || '';
-            
-            if (rule.image) {
-                ruleImageBase64 = rule.image;
-                document.getElementById('rule-image-preview').src = ruleImageBase64;
-                document.getElementById('rule-image-preview-container').style.display = "flex";
-            } else {
-                removeRuleImage();
-            }
-            
-            if (rule.voice) {
-                ruleVoiceBase64 = rule.voice;
-                document.getElementById('rule-audio-playback').src = rule.voice;
-                document.getElementById('rule-audio-preview-container').style.display = "flex";
-            } else {
-                removeRuleVoice();
-            }
-            
-            document.getElementById('rule-modal').classList.add('open');
-        }
-
-        function closeModal() {
-            document.getElementById('rule-modal').classList.remove('open');
-            if (ruleMediaRecorder && ruleMediaRecorder.state === "recording") {
-                ruleMediaRecorder.stop();
-                clearInterval(ruleRecordingTimer);
-            }
-        }
-
-        async function saveRule() {
-            const key = document.getElementById('kw-input').value.trim().toLowerCase();
-            const reply = document.getElementById('reply-input').value.trim();
-
-            if (!key) {
-                alert('Trigger keyword is required.');
-                return;
-            }
-
-            if (!reply && !ruleImageBase64 && !ruleVoiceBase64) {
-                alert('Please enter response text, select an image, or record a voice note.');
-                return;
-            }
-
-            const updatedKeywords = { ...currentKeywords };
-            
-            // If we are editing and the trigger keyword was changed, delete the old trigger key
-            if (editingKey && editingKey !== key) {
-                delete updatedKeywords[editingKey];
-            }
-            
-            try {
-                if (editingKey && editingKey !== key) {
-                    await fetch('/api/keywords/delete-rule', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ key: editingKey })
-                    });
-                    delete currentKeywords[editingKey];
-                }
-
-                const res = await fetch('/api/keywords/save-rule', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        key: key,
-                        rule: {
-                            text: reply || null,
-                            image: ruleImageBase64 || null,
-                            voice: ruleVoiceBase64 || null
-                        }
-                    })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    currentKeywords[key] = {
-                        text: reply || null,
-                        image: ruleImageBase64 || null,
-                        voice: ruleVoiceBase64 || null
-                    };
-                    closeModal();
-                } else {
-                    alert('Error saving rule: ' + data.message);
-                }
-            } catch (err) {
-                alert('Network connection error: ' + err.message);
-            }
-        }
-
-        let keyToDelete = null;
-
-        function openConfirmModal(key) {
-            keyToDelete = key;
-            document.getElementById('confirm-message').textContent = `Are you sure you want to delete the responder rule for keyword "${key}"?`;
-            
-            const deleteBtn = document.getElementById('confirm-delete-btn');
-            deleteBtn.onclick = executeDelete;
-            
-            document.getElementById('confirm-modal').classList.add('open');
-        }
-
-        function closeConfirmModal() {
-            document.getElementById('confirm-modal').classList.remove('open');
-            keyToDelete = null;
-        }
-
-        async function executeDelete() {
-            if (!keyToDelete) return;
-            const key = keyToDelete;
-            closeConfirmModal();
-
-            try {
-                const res = await fetch('/api/keywords/delete-rule', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: key })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    delete currentKeywords[key];
-                } else {
-                    alert('Error deleting rule: ' + data.message);
-                }
-            } catch (err) {
-                alert('Network connection error: ' + err.message);
-            }
-        }
-
-        // Direct Message Sender functions
-        let mediaRecorder = null;
-        let audioChunks = [];
-        let voiceBase64 = null;
-        let recordingTimer = null;
-        let recordingSeconds = 0;
-        let imageBase64 = null;
-
-        function handleImageSelect(event) {
-            const file = event.target.files[0];
-            const previewContainer = document.getElementById('image-preview-container');
-            const previewImg = document.getElementById('image-preview');
-            
-            if (!file) {
-                imageBase64 = null;
-                previewContainer.style.display = "none";
-                return;
-            }
-            
-            resizeAndConvertImage(file, (base64) => {
-                imageBase64 = base64;
-                previewImg.src = base64;
-                previewContainer.style.display = "flex";
-            });
-        }
-
-        function removeImage() {
-            imageBase64 = null;
-            document.getElementById('image-input').value = "";
-            document.getElementById('image-preview-container').style.display = "none";
-        }
-
-        async function toggleRecording() {
-            const recordBtn = document.getElementById('record-btn');
-            const timerSpan = document.getElementById('record-timer');
-            const audioPreview = document.getElementById('audio-preview-container');
-            
-            if (mediaRecorder && mediaRecorder.state === "recording") {
-                mediaRecorder.stop();
-                clearInterval(recordingTimer);
-                recordBtn.innerHTML = "🎤 Record Voice Note";
-                recordBtn.className = "btn";
-                return;
-            }
-            
-            audioChunks = [];
-            voiceBase64 = null;
-            document.getElementById('audio-playback').src = "";
-            audioPreview.style.display = "none";
-            
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                
-                let options = { mimeType: 'audio/webm' };
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    options = { mimeType: 'audio/ogg' };
-                }
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    options = { mimeType: 'audio/mp4' };
-                }
-                
-                mediaRecorder = new MediaRecorder(stream, options);
-                
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        audioChunks.push(event.data);
-                    }
-                };
-                
-                mediaRecorder.onstop = () => {
-                    const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
-                    const reader = new FileReader();
-                    reader.readAsDataURL(audioBlob);
-                    reader.onloadend = () => {
-                        voiceBase64 = reader.result;
-                        document.getElementById('audio-playback').src = URL.createObjectURL(audioBlob);
-                        audioPreview.style.display = "flex";
-                    };
-                    stream.getTracks().forEach(track => track.stop());
-                };
-                
-                mediaRecorder.start();
-                
-                recordingSeconds = 0;
-                timerSpan.textContent = "00:00";
-                timerSpan.style.display = "inline";
-                
-                recordBtn.innerHTML = "⏹️ Stop Recording";
-                recordBtn.className = "btn btn-danger";
-                
-                recordingTimer = setInterval(() => {
-                    recordingSeconds++;
-                    const mins = String(Math.floor(recordingSeconds / 60)).padStart(2, '0');
-                    const secs = String(recordingSeconds % 60).padStart(2, '0');
-                    timerSpan.textContent = `${mins}:${secs}`;
-                }, 1000);
-                
-            } catch (err) {
-                alert("Failed to access microphone: " + err.message);
-            }
-        }
-
-        function removeVoice() {
-            voiceBase64 = null;
-            document.getElementById('audio-playback').src = "";
-            document.getElementById('audio-preview-container').style.display = "none";
-            document.getElementById('record-timer').style.display = "none";
-        }
-
-        async function sendDirectMessage() {
-            const number = document.getElementById('dest-number').value.trim();
-            const text = document.getElementById('msg-text').value.trim();
-            const sendBtn = document.getElementById('send-msg-btn');
-            
-            if (!number) {
-                alert("Recipient phone number is required.");
-                return;
-            }
-            
-            if (!text && !imageBase64 && !voiceBase64) {
-                alert("Please enter a message, attach an image, or record a voice note.");
-                return;
-            }
-            
-            sendBtn.disabled = true;
-            sendBtn.textContent = "Sending...";
-            
-            try {
-                const res = await fetch('/api/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        number,
-                        text,
-                        image: imageBase64,
-                        voice: voiceBase64
-                    })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    alert("Message sent successfully!");
-                    document.getElementById('msg-text').value = "";
-                    removeImage();
-                    removeVoice();
-                } else {
-                    alert("Error sending message: " + data.message);
-                }
-            } catch (err) {
-                alert("Failed to send: " + err.message);
-            } finally {
-                sendBtn.disabled = false;
-                sendBtn.textContent = "🚀 Send Message";
-            }
-        }
-    </script>
+async function sendDirectMessage() {
+    const number = document.getElementById('dest-number').value.trim(); const text = document.getElementById('msg-text').value.trim(); const sendBtn = document.getElementById('send-msg-btn');
+    if (!number) { alert('Recipient phone number is required.'); return; }
+    if (!text && !imageBase64 && !voiceBase64) { alert('Please enter a message, attach an image, or record a voice note.'); return; }
+    sendBtn.disabled = true; sendBtn.textContent = 'Sending...';
+    try {
+        const res = await fetch('/api/send', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ number, text, image: imageBase64, voice: voiceBase64 }) });
+        const data = await res.json();
+        if (data.success) { alert('Message sent successfully!'); document.getElementById('msg-text').value = ''; removeImage(); removeVoice(); }
+        else { alert('Error sending message: ' + data.message); }
+    } catch(err) { alert('Failed to send: ' + err.message); }
+    finally { sendBtn.disabled = false; sendBtn.textContent = 'Send Message'; }
+}
+</script>
 </body>
 </html>

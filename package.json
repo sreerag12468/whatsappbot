@@ -15,6 +15,7 @@
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "ffmpeg-static": "^5.2.0",
+    "http-proxy-middleware": "^3.0.3",
     "link-preview-js": "^3.2.0",
     "pino": "^8.19.0",
     "qrcode": "^1.5.3",

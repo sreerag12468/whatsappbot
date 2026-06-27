@@ -1,10 +1,12 @@
 [phases.setup]
-nixPkgs = ["...", "git"]
+nixPkgs = ["...", "git", "python311", "python311Packages.pip"]
 aptPkgs = ["ffmpeg"]
 
-
 [phases.install]
-cmds = ["npm install --legacy-peer-deps"]
+cmds = [
+  "npm install --legacy-peer-deps",
+  "pip install flask google-api-python-client google-auth-oauthlib gunicorn"
+]
 
 [start]
 cmd = "node app.js"

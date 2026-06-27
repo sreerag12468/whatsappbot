@@ -4,3 +4,15 @@ auth_info_baileys_test/
 temp_audio/
 .env
 .DS_Store
+
+# YT bot runtime files (sensitive/large)
+yt-bot/token.json
+yt-bot/seen_comments.json
+yt-bot/seen_authors.json
+yt-bot/quota_log.json
+yt-bot/bot.log
+yt-bot/session.key
+yt-bot/__pycache__/
+yt-bot/*.pyc
+# Never commit OAuth client secrets to git
+yt-bot/client_secret*.json

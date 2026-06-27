@@ -1,0 +1,40 @@
+{
+  "bot_running": true,
+  "poll_interval": 10,
+  "max_results": 20,
+  "reply_delay_min": 8,
+  "reply_delay_max": 20,
+  "automated_video_ids": [
+    "ijjhHY5Ov9o",
+    "18xGtfjcJag",
+    "SKaRrWwZDV8"
+  ],
+  "video_configs": {
+    "18xGtfjcJag": {
+      "any_comment_enabled": true,
+      "any_comment_reply": "\ud83d\udce9 For Orders & Enquiries Contact us on WhatsApp: +91 9895138430 \ud83d\udcac\u2728 \ud83c\udf10 Visit our website: www.radikikk.shop \ud83d\udecd\ufe0f",
+      "default_reply": "",
+      "rules": []
+    },
+    "SKaRrWwZDV8": {
+      "any_comment_enabled": true,
+      "any_comment_reply": "\ud83d\udce9 For Orders & Enquiries Contact us on WhatsApp: +91 9895138430 \ud83d\udcac\u2728 \ud83c\udf10 Visit our website: www.radikikk.shop \ud83d\udecd\ufe0f",
+      "default_reply": "",
+      "rules": []
+    },
+    "ijjhHY5Ov9o": {
+      "rules": [
+        {
+          "keywords": [
+            "3d",
+            "3D"
+          ],
+          "reply": "\ud83d\udce9 For Orders & Enquiries Contact us on WhatsApp: +91 9895138430 \ud83d\udcac\u2728 \ud83c\udf10 Visit our website: www.radikikk.shop \ud83d\udecd\ufe0f"
+        }
+      ],
+      "default_reply": "Thanks for watching!",
+      "any_comment_enabled": true,
+      "any_comment_reply": "\ud83d\udce9 For Orders & Enquiries Contact us on WhatsApp: +91 9895138430 \ud83d\udcac\u2728 \ud83c\udf10 Visit our website: www.radikikk.shop \ud83d\udecd\ufe0f"
+    }
+  }
+}

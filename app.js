@@ -9,9 +9,10 @@ import fs from 'fs';
 import path from 'path';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import ffmpegPath from 'ffmpeg-static';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 
 const execPromise = promisify(exec);
 
@@ -173,6 +174,57 @@ function saveKeywords(kwMap) {
     }
 }
 
+// ── YT Bot subprocess launcher ──────────────────────────────────────────────
+// The Python Flask YT bot runs on internal port 8080, proxied at /yt/*
+const YT_BOT_DIR = path.join(__dirname, 'yt-bot');
+const YT_BOT_PORT = 8080;
+let ytBotProcess = null;
+
+function startYTBot() {
+    const ytAppPath = path.join(YT_BOT_DIR, 'app.py');
+    if (!fs.existsSync(ytAppPath)) {
+        console.log('[YT Bot] yt-bot/app.py not found — skipping YT bot startup.');
+        return;
+    }
+
+    console.log('[YT Bot] Starting Python Flask YT bot on internal port', YT_BOT_PORT);
+    
+    // Use gunicorn in production (Railway), fallback to python directly
+    const useGunicorn = process.env.RAILWAY_ENVIRONMENT === 'production';
+    
+    let ytProc;
+    if (useGunicorn) {
+        ytProc = spawn('gunicorn', [
+            '--chdir', YT_BOT_DIR,
+            '--bind', `0.0.0.0:${YT_BOT_PORT}`,
+            '--workers', '1',
+            '--threads', '2',
+            '--timeout', '120',
+            'app:app'
+        ], { stdio: 'pipe', env: { ...process.env } });
+    } else {
+        const pythonBin = process.platform === 'win32' ? 'python' : 'python3';
+        ytProc = spawn(pythonBin, [ytAppPath], {
+            stdio: 'pipe',
+            cwd: YT_BOT_DIR,
+            env: { ...process.env, FLASK_PORT: String(YT_BOT_PORT) }
+        });
+    }
+    
+    ytProc.stdout.on('data', d => process.stdout.write(`[YT Bot] ${d}`));
+    ytProc.stderr.on('data', d => process.stderr.write(`[YT Bot] ${d}`));
+    ytProc.on('close', code => {
+        console.log(`[YT Bot] Process exited with code ${code}. Restarting in 5s...`);
+        ytBotProcess = null;
+        setTimeout(startYTBot, 5000);
+    });
+    ytProc.on('error', err => {
+        console.error('[YT Bot] Spawn error:', err.message);
+    });
+    
+    ytBotProcess = ytProc;
+}
+
 // Server setup
 const app = express();
 const server = http.createServer(app);
@@ -183,6 +235,22 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// ── Proxy /yt/* → Python Flask YT bot ───────────────────────────────────────
+app.use('/yt', createProxyMiddleware({
+    target: `http://127.0.0.1:${YT_BOT_PORT}`,
+    changeOrigin: true,
+    pathRewrite: { '^/yt': '' },
+    on: {
+        error: (err, req, res) => {
+            console.error('[YT Proxy] Error:', err.message);
+            if (!res.headersSent) {
+                res.status(502).send('<html><body style="background:#07090f;color:#ef4444;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><div style="font-size:2rem">⚠️</div><div style="margin-top:1rem;font-size:1rem">YT Bot is starting up...<br><small style="color:#64748b">Refresh in a few seconds</small></div></div></body></html>');
+            }
+        }
+    }
+}));
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/status', (req, res) => {
@@ -803,5 +871,6 @@ server.listen(PORT, () => {
     addLog(`Server is running on port ${PORT}`);
     addLog(`Dashboard URL: http://localhost:${PORT}`);
     connectToWhatsApp();
+    startYTBot();
 });
 
