@@ -1,11 +1,9 @@
-[phases.setup]
-nixPkgs = ["...", "git"]
-aptPkgs = ["ffmpeg"]
+providers = ["node", "python"]
 
 [phases.install]
 cmds = [
   "npm install --legacy-peer-deps",
-  "python3 -m pip install flask google-api-python-client google-auth-oauthlib"
+  "pip install -r requirements.txt"
 ]
 
 [start]
