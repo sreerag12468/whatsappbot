@@ -493,18 +493,30 @@ threading.Thread(target=polling_daemon, daemon=True, name="YTPoller").start()
 # ── Flask Routes ──────────────────────────────────────────────────────────────
 # ── OAuth redirect URI helper ──────────────────────────────────────────
 def get_oauth_redirect_uri() -> str:
-    """Build the OAuth redirect URI dynamically.
-    On Railway: uses RAILWAY_STATIC_URL / RAILWAY_PUBLIC_DOMAIN to point to /yt/
-    Locally:    uses http://localhost:8080/
+    """Build the OAuth redirect URI.
+    Hardcoded for Railway deployment, localhost for local dev.
     """
-    # Railway exposes the public domain via env var
-    public_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN") or os.environ.get("RAILWAY_STATIC_URL", "")
+    # Detect Railway environment by checking Railway-specific env vars
+    is_railway = bool(
+        os.environ.get("RAILWAY_ENVIRONMENT") or
+        os.environ.get("RAILWAY_SERVICE_ID") or
+        os.environ.get("RAILWAY_PROJECT_ID")
+    )
+    if is_railway:
+        # Fixed Railway deployment URL — update this if your Railway URL changes
+        return "https://whatsappbot-production-d81c.up.railway.app/yt/"
+    # Also support dynamic detection for flexibility
+    public_domain = (
+        os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip() or
+        os.environ.get("RAILWAY_STATIC_URL", "").strip()
+    )
     if public_domain:
-        # Strip scheme if present
         if "://" in public_domain:
-            public_domain = public_domain.split("://", 1)[1]
+            public_domain = public_domain.split("://", 1)[1].rstrip("/")
         return f"https://{public_domain}/yt/"
+    # Local development fallback
     return "http://localhost:8080/"
+
 
 @app.route("/")
 def index():

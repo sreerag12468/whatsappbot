@@ -1,0 +1,21 @@
+node_modules/
+auth_info_baileys/
+auth_info_baileys_test/
+temp_audio/
+.env
+.DS_Store
+
+# YT bot sensitive files — should not go into Docker image
+# OAuth token (user-specific, should not be baked in)
+yt-bot/token.json
+yt-bot/seen_authors.json
+yt-bot/seen_comments.json
+yt-bot/quota_log.json
+yt-bot/bot.log
+yt-bot/session.key
+yt-bot/__pycache__/
+yt-bot/*.pyc
+
+# IMPORTANT: Exclude the client secret file — the built-in fallback in app.py
+# handles credentials automatically, so we never need this file in Docker
+yt-bot/client_secret*.json
