@@ -499,7 +499,7 @@ def index():
             with open(TOKEN_FILE, "w", encoding="utf-8") as f:
                 f.write(flow.credentials.to_json())
             log("SUCCESS", "Google account linked successfully.")
-            return redirect("/")
+            return redirect("/yt/" if os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_STATIC_URL") or os.environ.get("RAILWAY_PUBLIC_DOMAIN") else "/")
         except Exception as e:
             log("ERROR", f"OAuth callback error: {e}")
             return f"Authorization failed: {e}", 400

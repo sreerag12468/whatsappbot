@@ -230,7 +230,7 @@ textarea{resize:vertical;min-height:56px}
   <div style="font-size:2.5rem;margin-bottom:1rem">🔑</div>
   <h2>Connect YouTube Account</h2>
   <p>Link your Google account so the bot can read comments and auto-reply on your behalf. Sessions are saved permanently — you only need to do this once.</p>
-  <a href="/auth/start" class="btn btn-primary" style="font-size:1rem;padding:.85rem 2rem">Link Google Account</a>
+  <a id="auth-link" href="/auth/start" class="btn btn-primary" style="font-size:1rem;padding:.85rem 2rem">Link Google Account</a>
 </div>
 
 {% else %}
@@ -328,6 +328,14 @@ const S = {
   automated_video_ids: [], video_configs: {}, videos: []
 };
 
+// Adjust auth link href under proxy
+if (window.location.pathname.startsWith('/yt')) {
+  const authLink = document.getElementById("auth-link");
+  if (authLink) {
+    authLink.href = "/yt/auth/start";
+  }
+}
+
 {% if authenticated %}
 document.addEventListener("DOMContentLoaded", () => {
   fetchStatus();
@@ -340,7 +348,14 @@ document.addEventListener("DOMContentLoaded", () => {
 async function api(url, method = "GET", body = null) {
   const o = { method, headers: {"Content-Type":"application/json"} };
   if (body) o.body = JSON.stringify(body);
-  return (await fetch(url, o)).json();
+  
+  let targetUrl = url;
+  if (window.location.pathname.startsWith('/yt')) {
+    const cleanPath = url.startsWith('/') ? url.substring(1) : url;
+    targetUrl = '/yt/' + cleanPath;
+  }
+  
+  return (await fetch(targetUrl, o)).json();
 }
 
 // ══ Status ════════════════════════════════════════════════════════════════════

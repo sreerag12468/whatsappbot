@@ -176,8 +176,9 @@ function saveKeywords(kwMap) {
 
 // ── YT Bot subprocess launcher ──────────────────────────────────────────────
 // The Python Flask YT bot runs on internal port 8080, proxied at /yt/*
+const PORT = process.env.PORT || 3000;
 const YT_BOT_DIR = path.join(__dirname, 'yt-bot');
-const YT_BOT_PORT = 8080;
+const YT_BOT_PORT = parseInt(PORT) + 1;
 let ytBotProcess = null;
 
 function startYTBot() {
@@ -867,7 +868,6 @@ async function connectToWhatsApp() {
     }
 }
 
-const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     addLog(`Server is running on port ${PORT}`);
     addLog(`Dashboard URL: http://localhost:${PORT}`);
