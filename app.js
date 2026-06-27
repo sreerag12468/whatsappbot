@@ -194,7 +194,8 @@ function startYTBot() {
     
     let ytProc;
     if (useGunicorn) {
-        ytProc = spawn('gunicorn', [
+        ytProc = spawn('python3', [
+            '-m', 'gunicorn',
             '--chdir', YT_BOT_DIR,
             '--bind', `0.0.0.0:${YT_BOT_PORT}`,
             '--workers', '1',
