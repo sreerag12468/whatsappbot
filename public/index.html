@@ -186,9 +186,10 @@
             <div class="card" style="display: flex; flex-direction: column; gap: 16px; min-height: 80vh;">
                 <div class="card-title">
                     <span>🔗 Live Bio Page</span>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="text" id="insta-username" class="form-input" placeholder="e.g. username" style="max-width: 180px; padding: 6px 12px; font-size: 13px;" onkeypress="if(event.key === 'Enter') saveInstaUsername()">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="text" id="insta-username" class="form-input" placeholder="e.g. username" style="max-width: 150px; padding: 6px 12px; font-size: 13px;" onkeypress="if(event.key === 'Enter') saveInstaUsername()">
                         <button class="btn" style="padding: 6px 12px; font-size: 13px;" onclick="saveInstaUsername()">Save</button>
+                        <a id="insta-live-link" href="#" target="_blank" class="btn" style="padding: 6px 12px; font-size: 13px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); display: none; text-decoration: none;">View ↗</a>
                     </div>
                 </div>
                 <div id="insta-iframe-container" style="flex: 1; border-radius: 12px; overflow: hidden; background: rgba(0,0,0,0.2); border: 1px dashed var(--border-glass); display: flex; align-items: center; justify-content: center; position: relative; min-height: 500px;">
@@ -221,7 +222,7 @@
                     <p style="color: var(--text-secondary); font-size: 12px; max-width: 320px; line-height: 1.5;">
                         Access your official SuperProfile dashboard to build AutoDM campaigns, upload digital products, and view sales metrics.
                     </p>
-                    <a href="https://dashboard.superprofile.bio/" target="_blank" class="btn" style="background: linear-gradient(135deg, #a855f7, #ec4899); box-shadow: 0 4px 15px rgba(168,85,247,0.3); margin-top: 4px; text-decoration: none;">
+                    <a href="https://superprofile.bio/signin" target="_blank" class="btn" style="background: linear-gradient(135deg, #a855f7, #ec4899); box-shadow: 0 4px 15px rgba(168,85,247,0.3); margin-top: 4px; text-decoration: none;">
                         Open SuperProfile Dashboard ↗
                     </a>
                 </div>
@@ -546,15 +547,20 @@ function saveInstaUsername() {
 function loadInstaIframe(username) {
     const iframe = document.getElementById('insta-iframe');
     const prompt = document.getElementById('insta-setup-prompt');
+    const liveLink = document.getElementById('insta-live-link');
     if (username) {
         document.getElementById('insta-username').value = username;
         iframe.src = `https://superprofile.bio/${username}`;
         iframe.style.display = 'block';
         prompt.style.display = 'none';
+        
+        liveLink.href = `https://superprofile.bio/${username}`;
+        liveLink.style.display = 'inline-flex';
     } else {
         iframe.src = 'about:blank';
         iframe.style.display = 'none';
         prompt.style.display = 'block';
+        liveLink.style.display = 'none';
     }
 }
 
