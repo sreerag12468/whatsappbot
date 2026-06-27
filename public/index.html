@@ -106,6 +106,9 @@
         <button id="tab-yt-btn" class="tab-btn" onclick="switchTab('yt')">
             &#x1F4FA; YouTube Bot <span class="tab-badge">Auto-Reply</span>
         </button>
+        <button id="tab-insta-btn" class="tab-btn" onclick="switchTab('insta')">
+            &#x1F4F8; Instagram Bot <span class="tab-badge">SuperProfile</span>
+        </button>
     </div>
 
     <div id="tab-wa" class="tab-panel active">
@@ -174,6 +177,84 @@
                 <div style="color:var(--text-secondary);font-size:14px">Loading YouTube Bot...</div>
             </div>
             <iframe id="yt-iframe" src="about:blank" data-src="/yt/" title="YouTube Auto-Reply Bot" onload="onYTIframeLoad()" allow="clipboard-write"></iframe>
+        </div>
+    </div>
+
+    <div id="tab-insta" class="tab-panel">
+        <div class="grid">
+            <!-- Left: SuperProfile Live Page Preview -->
+            <div class="card" style="display: flex; flex-direction: column; gap: 16px; min-height: 80vh;">
+                <div class="card-title">
+                    <span>🔗 Live Bio Page</span>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="insta-username" class="form-input" placeholder="e.g. username" style="max-width: 180px; padding: 6px 12px; font-size: 13px;" onkeypress="if(event.key === 'Enter') saveInstaUsername()">
+                        <button class="btn" style="padding: 6px 12px; font-size: 13px;" onclick="saveInstaUsername()">Save</button>
+                    </div>
+                </div>
+                <div id="insta-iframe-container" style="flex: 1; border-radius: 12px; overflow: hidden; background: rgba(0,0,0,0.2); border: 1px dashed var(--border-glass); display: flex; align-items: center; justify-content: center; position: relative; min-height: 500px;">
+                    <div id="insta-setup-prompt" style="text-align: center; padding: 20px; max-width: 320px;">
+                        <div style="font-size: 40px; margin-bottom: 12px;">🔗</div>
+                        <h4 style="font-size: 16px; font-weight: 600; margin-bottom: 6px;">Show Your Bio Page</h4>
+                        <p style="color: var(--text-secondary); font-size: 13px; line-height: 1.5; margin-bottom: 16px;">
+                            Enter your SuperProfile username above to display your live bio site storefront inside the dashboard.
+                        </p>
+                    </div>
+                    <iframe id="insta-iframe" src="about:blank" style="display: none; width: 100%; height: 100%; border: none;"></iframe>
+                </div>
+            </div>
+            
+            <!-- Right: SuperProfile Dashboard & DM Automation Info -->
+            <div class="card" style="min-height: 80vh; justify-content: flex-start; gap: 20px;">
+                <div class="card-title">
+                    <span>🤖 Instagram AutoDM Automation</span>
+                    <span style="font-size: 11px; font-weight: 700; color: #a855f7; text-transform: uppercase; background: rgba(168,85,247,0.1); padding: 2px 8px; border-radius: 20px; border: 1px solid rgba(168,85,247,0.2);">Meta Verified</span>
+                </div>
+                
+                <p style="color: var(--text-secondary); font-size: 14px; line-height: 1.65;">
+                    SuperProfile is an official Meta-verified partner. Set up keyword triggers on Reels, Posts, and Stories to automatically reply to comments and message users directly on Instagram.
+                </p>
+                
+                <!-- Quick Link Button -->
+                <div style="background: rgba(168,85,247,0.05); border: 1px solid rgba(168,85,247,0.15); border-radius: 12px; padding: 20px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 10px;">
+                    <div style="font-size: 28px;">⚡</div>
+                    <h4 style="font-weight: 600; font-size: 15px;">SuperProfile Creator Console</h4>
+                    <p style="color: var(--text-secondary); font-size: 12px; max-width: 320px; line-height: 1.5;">
+                        Access your official SuperProfile dashboard to build AutoDM campaigns, upload digital products, and view sales metrics.
+                    </p>
+                    <a href="https://dashboard.superprofile.bio/" target="_blank" class="btn" style="background: linear-gradient(135deg, #a855f7, #ec4899); box-shadow: 0 4px 15px rgba(168,85,247,0.3); margin-top: 4px; text-decoration: none;">
+                        Open SuperProfile Dashboard ↗
+                    </a>
+                </div>
+                
+                <!-- Setup Guide -->
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
+                    <h4 style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">How to configure Instagram DM automation:</h4>
+                    
+                    <div style="display: flex; gap: 12px; align-items: flex-start;">
+                        <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-glass); border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; color: #a855f7;">1</div>
+                        <div>
+                            <h5 style="font-size: 13.5px; font-weight: 600; margin-bottom: 2px;">Connect Instagram Account</h5>
+                            <p style="color: var(--text-secondary); font-size: 12.5px; line-height: 1.5;">Navigate to Integrations in your SuperProfile dashboard and authenticate with your Meta/Instagram creator profile.</p>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; align-items: flex-start;">
+                        <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-glass); border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; color: #a855f7;">2</div>
+                        <div>
+                            <h5 style="font-size: 13.5px; font-weight: 600; margin-bottom: 2px;">Set Comment & DM Keywords</h5>
+                            <p style="color: var(--text-secondary); font-size: 12.5px; line-height: 1.5;">Define a keyword trigger (e.g. "ebook", "access") and write the automated reply message to be delivered instantly to user DMs.</p>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; align-items: flex-start;">
+                        <div style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-glass); border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; color: #a855f7;">3</div>
+                        <div>
+                            <h5 style="font-size: 13.5px; font-weight: 600; margin-bottom: 2px;">Launch & Automate Leads</h5>
+                            <p style="color: var(--text-secondary); font-size: 12.5px; line-height: 1.5;">Your bio link (displayed on the left) will capture emails and handle checkouts for any digital items promoted in DMs.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -453,6 +534,37 @@ async function sendDirectMessage() {
     } catch(err) { alert('Failed to send: ' + err.message); }
     finally { sendBtn.disabled = false; sendBtn.textContent = 'Send Message'; }
 }
+
+// ── Instagram / SuperProfile Tab Logic ──
+function saveInstaUsername() {
+    const username = document.getElementById('insta-username').value.trim();
+    if (!username) return;
+    localStorage.setItem('superprofile_username', username);
+    loadInstaIframe(username);
+}
+
+function loadInstaIframe(username) {
+    const iframe = document.getElementById('insta-iframe');
+    const prompt = document.getElementById('insta-setup-prompt');
+    if (username) {
+        document.getElementById('insta-username').value = username;
+        iframe.src = `https://superprofile.bio/${username}`;
+        iframe.style.display = 'block';
+        prompt.style.display = 'none';
+    } else {
+        iframe.src = 'about:blank';
+        iframe.style.display = 'none';
+        prompt.style.display = 'block';
+    }
+}
+
+// Automatically load username on startup if saved
+document.addEventListener('DOMContentLoaded', () => {
+    const saved = localStorage.getItem('superprofile_username');
+    if (saved) {
+        loadInstaIframe(saved);
+    }
+});
 </script>
 </body>
 </html>
