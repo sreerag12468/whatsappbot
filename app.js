@@ -184,40 +184,42 @@ let ytBotProcess = null;
 function findPythonBinary() {
     if (process.platform === 'win32') return 'python';
     
-    // Diagnostic log PATH and standard search paths
-    addLog(`[YT Debug] PATH: ${process.env.PATH}`);
+    // Dynamically append Nix profile bins to PATH so subprocesses can resolve Nix packages
+    const nixBins = [
+        '/root/.nix-profile/bin',
+        '/home/nixpacks/.nix-profile/bin',
+        '/nix/var/nix/profiles/default/bin'
+    ];
+    process.env.PATH = `${process.env.PATH}:${nixBins.join(':')}`;
+    addLog(`[YT Debug] Extended PATH: ${process.env.PATH}`);
+
     try {
         const binSearch = execSync('which -a python python3 python3.11 python3.10 python3.9 python3.8 python3.7 2>&1 || true').toString().trim();
         addLog(`[YT Debug] 'which' search results:\n${binSearch}`);
-    } catch (e) {
-        addLog(`[YT Debug] 'which' failed: ${e.message}`);
-    }
+    } catch (e) {}
     
     try {
-        const binList = execSync('ls -la /usr/bin/python* /usr/local/bin/python* /opt/python*/bin/python* 2>/dev/null || true').toString().trim();
-        if (binList) {
-            addLog(`[YT Debug] Found python files:\n${binList}`);
-        } else {
-            addLog(`[YT Debug] No python files found in standard paths.`);
-        }
-    } catch (e) {
-        addLog(`[YT Debug] ls failed: ${e.message}`);
-    }
+        const binList = execSync('ls -la /usr/bin/python* /usr/local/bin/python* /root/.nix-profile/bin/python* /home/nixpacks/.nix-profile/bin/python* 2>/dev/null || true').toString().trim();
+        if (binList) addLog(`[YT Debug] ls -la output:\n${binList}`);
+    } catch (e) {}
 
     const candidates = ['python3', 'python', 'python3.11', 'python3.10', 'python3.9'];
     for (const name of candidates) {
         try {
             const binPath = execSync(`which ${name}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
-            if (binPath && fs.existsSync(binPath)) {
-                return binPath;
-            }
+            if (binPath && fs.existsSync(binPath)) return binPath;
         } catch (e) {}
     }
+    
     const commonPaths = [
         '/usr/bin/python3',
         '/usr/bin/python',
         '/usr/local/bin/python3',
-        '/usr/local/bin/python'
+        '/usr/local/bin/python',
+        '/root/.nix-profile/bin/python3',
+        '/root/.nix-profile/bin/python',
+        '/home/nixpacks/.nix-profile/bin/python3',
+        '/home/nixpacks/.nix-profile/bin/python'
     ];
     for (const p of commonPaths) {
         if (fs.existsSync(p)) return p;
