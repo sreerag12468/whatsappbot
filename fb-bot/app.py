@@ -2104,7 +2104,35 @@ _load_replied_from_file()
 _load_ig_replied_from_file()
 _load_ig_welcomed()
 
+def initialize_token():
+    global PAGE_ACCESS_TOKEN
+    print("[Token Initialization] Validating token...")
+    try:
+        resp = requests.get(f"https://graph.facebook.com/v19.0/{PAGE_ID}", params={"access_token": PAGE_ACCESS_TOKEN}, timeout=8)
+        if resp.status_code == 200 and "error" not in resp.json():
+            print("[Token Initialization] Token is valid.")
+            return
+    except Exception as check_err:
+        print(f"[Token Check Error] {check_err}")
+
+    print("[Token Initialization] Token is invalid. Finding working fallback token...")
+    fallbacks = [
+        "EAAOEye5xXB4BR6ch9TYwzTXjHzZBm0B2hEIEcOiaKKkwApIAxriXPcL6JWRZBZCY4btAOJfrlpFZCvsZBqyZBGZAAFZCohutvzKfK56zZAnQLguXHrUvCbMhZCRZA5j0ZCpu9WeNVP2ZABN3rW4bWYPbl8V6iTSvcxt5pV7pdc1ZBjZAiuquoLd2Wt2oZAeeKRx8tZAAVyWk51ZCkDwshH",
+        "EAAOEye5xXB4BRzz8MnN62XaqxROB40ES6qPY1PY0Vpf5jpZAjsCAu0ZCOs9cNQqRgZAp9NrKJp8bMtIOhe3bWPovQJFlwcYkDuLytihtDXKeqHQvoJQERMKQ5xPZCepNLve3G6jU1Dyb4rtZAPKv2MeqB2IqsEolCGe4tu9nYdC7ZB0nMLoOKZBvazjZCzDmS8ZBm6kIbE9ZBY"
+    ]
+    for fb in fallbacks:
+        try:
+            r = requests.get(f"https://graph.facebook.com/v19.0/{PAGE_ID}", params={"access_token": fb}, timeout=8)
+            if r.status_code == 200 and "error" not in r.json():
+                PAGE_ACCESS_TOKEN = fb
+                print(f"[Token Initialization] Recovered using fallback token: {fb[:15]}...")
+                return
+        except Exception:
+            continue
+    print("[Token Initialization] WARNING: No working fallback tokens found!")
+
 try:
+    initialize_token()
     discover_ig_user_id()
     subscribe_page()
     subscribe_instagram()
