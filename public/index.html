@@ -155,6 +155,18 @@
                     </div>
                     <button id="send-msg-btn" class="btn" onclick="sendDirectMessage()" style="margin-top:8px">&#x1F680; Send Message</button>
                 </div>
+                
+                <div class="card">
+                    <div class="card-title"><span>Bulk Add to Group</span></div>
+                    <p style="color:var(--text-secondary);font-size:13px;line-height:1.4">
+                        Paste a WhatsApp group invite link below. The bot will automatically join/resolve the group and add all active chat numbers to it (one by one with a 3-second safety delay). If direct addition fails (e.g. privacy settings), it will automatically message them the invite link.
+                    </p>
+                    <div class="form-group">
+                        <label for="group-invite-link">Group Invite Link</label>
+                        <input type="text" id="group-invite-link" class="form-input" placeholder="e.g. https://chat.whatsapp.com/IKYimnsBTwAJC1K1G7qhYG">
+                    </div>
+                    <button id="add-group-btn" class="btn" onclick="addAllToGroup()" style="margin-top:8px">&#x2795; Add All to Group</button>
+                </div>
             </div>
             <div class="card">
                 <div class="card-title">
@@ -559,6 +571,39 @@ async function sendDirectMessage() {
         else { alert('Error sending message: ' + data.message); }
     } catch(err) { alert('Failed to send: ' + err.message); }
     finally { sendBtn.disabled = false; sendBtn.textContent = 'Send Message'; }
+}
+
+async function addAllToGroup() {
+    const groupLink = document.getElementById('group-invite-link').value.trim();
+    const btn = document.getElementById('add-group-btn');
+    if (!groupLink) {
+        alert('Please paste a WhatsApp group invite link.');
+        return;
+    }
+    if (!confirm('Are you sure you want to add/invite all chat numbers to this group? This process runs in the background.')) {
+        return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Starting process...';
+    try {
+        const res = await fetch('/api/groups/add-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groupLink })
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert('Process successfully started in the background! You can monitor the progress in the Live Connection Logs below.');
+            document.getElementById('group-invite-link').value = '';
+        } else {
+            alert('Error starting group addition: ' + data.message);
+        }
+    } catch (err) {
+        alert('Failed to start: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Add All to Group';
+    }
 }
 
 // ── Instagram / SuperProfile Tab Logic ──

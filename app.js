@@ -174,6 +174,51 @@ function saveKeywords(kwMap) {
     }
 }
 
+// Persistent Active Contacts list
+// Useful to keep track of everyone who has ever chatted with the bot
+const CONTACTS_FILE = process.env.CONTACTS_FILE || path.join(__dirname, 'active_contacts.json');
+
+// Ensure contacts file exists with an empty array if it doesn't
+if (!fs.existsSync(CONTACTS_FILE)) {
+    try {
+        fs.writeFileSync(CONTACTS_FILE, '[]', 'utf8');
+    } catch (e) {
+        console.error('Failed to create active_contacts.json:', e);
+    }
+}
+
+function loadActiveContacts() {
+    try {
+        if (fs.existsSync(CONTACTS_FILE)) {
+            const list = JSON.parse(fs.readFileSync(CONTACTS_FILE, 'utf8'));
+            if (Array.isArray(list)) return list;
+        }
+    } catch (e) {
+        console.error('Error loading active contacts:', e.message);
+    }
+    return [];
+}
+
+function saveActiveContacts(contacts) {
+    try {
+        fs.writeFileSync(CONTACTS_FILE, JSON.stringify(contacts, null, 2), 'utf8');
+        return true;
+    } catch (e) {
+        console.error('Error saving active contacts:', e.message);
+        return false;
+    }
+}
+
+function addContact(jid) {
+    if (!jid || !jid.endsWith('@s.whatsapp.net')) return;
+    const contacts = loadActiveContacts();
+    if (!contacts.includes(jid)) {
+        contacts.push(jid);
+        saveActiveContacts(contacts);
+        addLog(`[Contact Sync] Added new active contact: ${jid}`);
+    }
+}
+
 // ── YT Bot subprocess launcher ──────────────────────────────────────────────
 // The Python Flask YT bot runs on internal port 8080, proxied at /yt/*
 const PORT = process.env.PORT || 3000;
@@ -633,6 +678,81 @@ app.post('/api/send', async (req, res) => {
     }
 });
 
+function parseInviteCode(link) {
+    if (!link) return null;
+    const match = link.match(/chat\.whatsapp\.com\/([a-zA-Z0-9]{22,24})/);
+    return match ? match[1] : link.trim();
+}
+
+app.post('/api/groups/add-all', async (req, res) => {
+    const { groupLink } = req.body;
+    if (!groupLink) {
+        return res.status(400).json({ success: false, message: 'Group link is required.' });
+    }
+    if (connectionStatus !== 'Connected' || !sock) {
+        return res.status(503).json({ success: false, message: 'WhatsApp bot is not connected.' });
+    }
+    const inviteCode = parseInviteCode(groupLink);
+    if (!inviteCode) {
+        return res.status(400).json({ success: false, message: 'Invalid WhatsApp group link.' });
+    }
+    
+    // Respond immediately to the frontend so it doesn't wait/timeout
+    res.json({ success: true, message: 'Group addition process started in background.' });
+
+    try {
+        addLog(`[Group Add] Resolving group invite code: ${inviteCode}`);
+        let groupJid = null;
+        try {
+            const inviteInfo = await sock.groupGetInviteInfo(inviteCode);
+            groupJid = inviteInfo.id;
+            addLog(`[Group Add] Group JID resolved: ${groupJid} (${inviteInfo.subject})`);
+        } catch (e) {
+            addLog(`[Group Add] Failed to get invite info, trying to accept invite/join...`);
+            groupJid = await sock.groupAcceptInvite(inviteCode);
+            addLog(`[Group Add] Group JID resolved after joining: ${groupJid}`);
+        }
+
+        if (!groupJid) {
+            addLog(`[Group Add] Error: Could not resolve group JID for code ${inviteCode}`);
+            return;
+        }
+
+        const contacts = loadActiveContacts();
+        addLog(`[Group Add] Found ${contacts.length} active contacts to process.`);
+
+        for (const jid of contacts) {
+            try {
+                addLog(`[Group Add] Adding participant: ${jid.split('@')[0]}`);
+                const response = await sock.groupParticipantsUpdate(groupJid, [jid], "add");
+                
+                let resStatus = null;
+                if (response && response[0]) {
+                    resStatus = response[0].status;
+                } else if (response && response[jid]) {
+                    resStatus = response[jid].status;
+                }
+
+                addLog(`[Group Add] Response status for ${jid.split('@')[0]}: ${resStatus}`);
+
+                if (resStatus === '403') {
+                    addLog(`[Group Add] Private invite needed for ${jid.split('@')[0]}. Sending invite message...`);
+                    await sock.sendMessage(jid, { 
+                        text: `Hi! Join our official WhatsApp group here: ${groupLink}` 
+                    });
+                }
+            } catch (err) {
+                addLog(`[Group Add] Failed to add or invite ${jid.split('@')[0]}: ${err.message}`);
+            }
+            // Delay 3 seconds between requests to avoid WhatsApp spam filter triggering
+            await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+        addLog(`[Group Add] Bulk addition process completed.`);
+    } catch (err) {
+        addLog(`[Group Add Error] Process failed: ${err.message}`);
+    }
+});
+
 app.post('/api/export-session', (req, res) => {
     const authDir = process.env.AUTH_DIR || path.join(__dirname, 'auth_info_baileys');
     try {
@@ -736,6 +856,31 @@ async function connectToWhatsApp() {
             backupSession(authStateDir);
         });
 
+        // Sync contacts and chats list to maintain our active contacts database
+        sock.ev.on('chats.set', ({ chats }) => {
+            if (chats) {
+                chats.forEach(c => addContact(c.id));
+            }
+        });
+
+        sock.ev.on('contacts.set', ({ contacts }) => {
+            if (contacts) {
+                contacts.forEach(c => addContact(c.id));
+            }
+        });
+
+        sock.ev.on('chats.upsert', (chats) => {
+            if (chats) {
+                chats.forEach(c => addContact(c.id));
+            }
+        });
+
+        sock.ev.on('contacts.upsert', (contacts) => {
+            if (contacts) {
+                contacts.forEach(c => addContact(c.id));
+            }
+        });
+
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
             
@@ -807,6 +952,15 @@ async function connectToWhatsApp() {
             if (m.type !== 'notify') return;
             
             for (const msg of m.messages) {
+                // Track contacts from every message exchange
+                if (msg.key && msg.key.remoteJid) {
+                    addContact(msg.key.remoteJid);
+                }
+                const partJid = msg.key?.participant || msg.participant;
+                if (partJid) {
+                    addContact(partJid);
+                }
+
                 if (msg.key.fromMe) continue;
                 
                 const messageType = Object.keys(msg.message || {})[0];
