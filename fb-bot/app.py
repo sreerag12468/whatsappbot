@@ -265,7 +265,8 @@ def send_dm(user_id, message):
 def send_private_reply(comment_id, message):
     """
     Send a private DM reply directly to a Facebook Page comment.
-    This works even if the user has never messaged the Page before.
+    Works for regular Page post comments.
+    Falls back to a public Messenger CTA comment for Reels (where private_replies is unsupported).
     """
     print(f"  [Private Reply] Attempting to send to comment_id={comment_id}")
     resp = requests.post(
@@ -276,8 +277,27 @@ def send_private_reply(comment_id, message):
     result = resp.json()
     if result.get("success") or "id" in result:
         print(f"  [Private Reply sent ✅]")
-    else:
-        print(f"  [Private Reply failed ❌] {result.get('error', {}).get('message', result)}")
+        return
+
+    err = result.get("error", {})
+    print(f"  [Private Reply failed ❌] {err.get('message', result)}")
+
+    # Fallback: post a public comment with a Messenger CTA link
+    # (private_replies is not supported on Reel comments by Meta's API)
+    if err.get("code") == 100 and err.get("error_subcode") == 33:
+        print(f"  [Fallback] Posting public CTA comment (Reel private_replies not supported)")
+        cta_message = f"We sent you a message! Tap here to get more details \u27a1 m.me/radikikk"
+        cta_resp = requests.post(
+            f"https://graph.facebook.com/v19.0/{comment_id}/comments",
+            data={"message": cta_message, "access_token": PAGE_ACCESS_TOKEN},
+            timeout=8
+        )
+        cta_result = cta_resp.json()
+        if "id" in cta_result:
+            print(f"  [Fallback CTA comment posted ✅] ID: {cta_result['id']}")
+        else:
+            print(f"  [Fallback CTA comment failed ❌] {cta_result}")
+
 
 def handle_comment(value):
     if value.get("verb") != "add" or value.get("item") != "comment":
