@@ -95,17 +95,26 @@ DEFAULT_FB_AUTOMATIONS = [
 ]
 
 def load_automations():
+    existing = []
     if os.path.exists(AUTOMATIONS_FILE):
         try:
             with open(AUTOMATIONS_FILE) as f:
-                data = json.load(f)
-            if data:   # non-empty list → use it
-                return data
+                existing = json.load(f) or []
         except Exception:
-            pass
-    # File missing or empty — seed defaults and persist them
-    save_automations(DEFAULT_FB_AUTOMATIONS)
-    return DEFAULT_FB_AUTOMATIONS
+            existing = []
+
+    # Always ensure default rules are present (merge by name, don't duplicate)
+    existing_names = {r.get("name") for r in existing}
+    changed = False
+    for default_rule in DEFAULT_FB_AUTOMATIONS:
+        if default_rule["name"] not in existing_names:
+            existing.append(default_rule)
+            changed = True
+
+    if changed:
+        save_automations(existing)
+
+    return existing
 
 def save_automations(data):
     with open(AUTOMATIONS_FILE, "w") as f:
