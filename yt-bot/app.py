@@ -18,10 +18,23 @@ except ImportError:
 
 # ── File Paths ────────────────────────────────────────────────────────────────
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
-TOKEN_FILE    = os.path.join(SCRIPT_DIR, "token.json")
-SETTINGS_FILE = os.path.join(SCRIPT_DIR, "settings.json")
-QUOTA_FILE    = os.path.join(SCRIPT_DIR, "quota_log.json")
-SEEN_FILE     = os.path.join(SCRIPT_DIR, "seen_authors.json")   # video_id::author_id
+
+is_railway = bool(
+    os.environ.get("RAILWAY_ENVIRONMENT") or
+    os.environ.get("RAILWAY_SERVICE_ID") or
+    os.environ.get("RAILWAY_PROJECT_ID")
+)
+if is_railway:
+    TOKEN_FILE    = os.path.join(SCRIPT_DIR, "token.json")
+    SETTINGS_FILE = os.path.join(SCRIPT_DIR, "settings.json")
+    QUOTA_FILE    = os.path.join(SCRIPT_DIR, "quota_log.json")
+    SEEN_FILE     = os.path.join(SCRIPT_DIR, "seen_authors.json")
+else:
+    TOKEN_FILE    = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "token.json"))
+    SETTINGS_FILE = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "yt_settings.json"))
+    QUOTA_FILE    = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "quota_log.json"))
+    SEEN_FILE     = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "seen_authors.json"))
+
 SECRET_FILE   = os.path.join(SCRIPT_DIR, "session.key")
 LOG_FILE      = os.path.join(SCRIPT_DIR, "bot.log")
 
@@ -438,8 +451,9 @@ def polling_daemon():
                             continue
 
                         # ── LAYER 3: Live API check — the super trick ────────
-                        # Costs 1 quota unit but guarantees no double-reply ever
-                        if owner_already_replied(youtube, thread_id, channel_id):
+                        # Only check live API if the thread has replies; if 0, owner cannot have replied
+                        total_replies = item.get("snippet", {}).get("totalReplyCount", 0)
+                        if total_replies > 0 and owner_already_replied(youtube, thread_id, channel_id):
                             log("INFO", f"  Already replied in thread {thread_id} — marking + skipping.")
                             seen.mark(video_id, author_id)  # backfill the guard
                             tracker.consume(1)

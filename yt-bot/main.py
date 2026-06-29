@@ -28,9 +28,20 @@ from config import (
     VIDEO_IDS,
 )
 
-TOKEN_FILE = "token.json"
-SEEN_FILE = "seen_comments.json"
-QUOTA_FILE = "quota_log.json"
+script_dir = os.path.dirname(os.path.abspath(__file__))
+is_railway = bool(
+    os.environ.get("RAILWAY_ENVIRONMENT") or
+    os.environ.get("RAILWAY_SERVICE_ID") or
+    os.environ.get("RAILWAY_PROJECT_ID")
+)
+if is_railway:
+    TOKEN_FILE = os.path.join(script_dir, "token.json")
+    SEEN_FILE = os.path.join(script_dir, "seen_comments.json")
+    QUOTA_FILE = os.path.join(script_dir, "quota_log.json")
+else:
+    TOKEN_FILE = os.path.abspath(os.path.join(script_dir, "..", "..", "token.json"))
+    SEEN_FILE = os.path.abspath(os.path.join(script_dir, "..", "..", "seen_comments.json"))
+    QUOTA_FILE = os.path.abspath(os.path.join(script_dir, "..", "..", "quota_log.json"))
 SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 DAILY_QUOTA = 10000
 

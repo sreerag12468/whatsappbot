@@ -13,12 +13,13 @@ import { exec, spawn, execSync } from 'child_process';
 import { promisify } from 'util';
 import ffmpegPath from 'ffmpeg-static';
 import { createProxyMiddleware } from 'http-proxy-middleware';
+import os from 'os';
 
 const execPromise = promisify(exec);
 
 // Session backup/restore helpers
 // Saves auth_info_baileys as base64 JSON to a backup file so sessions survive Railway restarts
-const SESSION_BACKUP_PATH = '/tmp/wa_session_backup.json';
+const SESSION_BACKUP_PATH = process.env.SESSION_BACKUP_PATH || path.join(os.tmpdir(), 'wa_session_backup.json');
 
 function backupSession(authDir) {
     try {
@@ -143,7 +144,45 @@ function addLog(text) {
 
 // Keyword handlers
 // Allow overriding the keywords file path via env var (useful for Railway persistent volumes)
+const isRailway = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_SERVICE_ID);
+const AUTH_DIR = process.env.AUTH_DIR || (isRailway ? path.join(__dirname, 'auth_info_baileys') : path.join(__dirname, '..', 'auth_info_baileys'));
+
+// Ensure persistent storage directory exists
+if (!fs.existsSync(AUTH_DIR)) {
+    try {
+        fs.mkdirSync(AUTH_DIR, { recursive: true });
+    } catch (e) {
+        console.error('Failed to create AUTH_DIR:', e);
+    }
+}
+
 const KEYWORDS_PATH = process.env.KEYWORDS_PATH || path.join(__dirname, 'keywords.json');
+const CONTACTS_FILE = process.env.CONTACTS_FILE || path.join(__dirname, 'active_contacts.json');
+
+// Initialize persistent keywords file if not present, copying from default template
+const DEFAULT_KEYWORDS_PATH = path.join(__dirname, 'keywords.json');
+if (!fs.existsSync(KEYWORDS_PATH)) {
+    try {
+        if (KEYWORDS_PATH !== DEFAULT_KEYWORDS_PATH && fs.existsSync(DEFAULT_KEYWORDS_PATH)) {
+            fs.copyFileSync(DEFAULT_KEYWORDS_PATH, KEYWORDS_PATH);
+            console.log('[Setup] Copied default keywords template to persistent storage.');
+        } else {
+            fs.writeFileSync(KEYWORDS_PATH, '{}', 'utf8');
+        }
+    } catch (e) {
+        console.error('Failed to initialize persistent keywords.json:', e);
+    }
+}
+
+// Ensure persistent contacts file exists
+if (!fs.existsSync(CONTACTS_FILE)) {
+    try {
+        fs.writeFileSync(CONTACTS_FILE, '[]', 'utf8');
+    } catch (e) {
+        console.error('Failed to initialize active_contacts.json:', e);
+    }
+}
+
 function loadKeywords() {
     try {
         if (fs.existsSync(KEYWORDS_PATH)) {
@@ -155,15 +194,6 @@ function loadKeywords() {
     return {};
 }
 
-// Ensure keywords file exists with a default empty object if it doesn't
-if (!fs.existsSync(KEYWORDS_PATH)) {
-    try {
-        fs.writeFileSync(KEYWORDS_PATH, '{}', 'utf8');
-    } catch (e) {
-        console.error('Failed to create default keywords.json:', e);
-    }
-}
-
 function saveKeywords(kwMap) {
     try {
         fs.writeFileSync(KEYWORDS_PATH, JSON.stringify(kwMap, null, 2), 'utf8');
@@ -171,19 +201,6 @@ function saveKeywords(kwMap) {
     } catch (e) {
         addLog(`Error saving keywords: ${e.message}`);
         return false;
-    }
-}
-
-// Persistent Active Contacts list
-// Useful to keep track of everyone who has ever chatted with the bot
-const CONTACTS_FILE = process.env.CONTACTS_FILE || path.join(__dirname, 'active_contacts.json');
-
-// Ensure contacts file exists with an empty array if it doesn't
-if (!fs.existsSync(CONTACTS_FILE)) {
-    try {
-        fs.writeFileSync(CONTACTS_FILE, '[]', 'utf8');
-    } catch (e) {
-        console.error('Failed to create active_contacts.json:', e);
     }
 }
 
@@ -216,6 +233,31 @@ function addContact(jid) {
         contacts.push(jid);
         saveActiveContacts(contacts);
         addLog(`[Contact Sync] Added new active contact: ${jid}`);
+    }
+}
+
+// Clears Baileys credentials and token state files, keeping rules and contacts intact
+function clearSessionFiles(dir) {
+    if (!fs.existsSync(dir)) return;
+    try {
+        fs.readdirSync(dir).forEach(f => {
+            if (f !== 'keywords.json' && f !== 'active_contacts.json') {
+                const filePath = path.join(dir, f);
+                try {
+                    const stat = fs.statSync(filePath);
+                    if (stat.isDirectory()) {
+                        fs.rmSync(filePath, { recursive: true, force: true });
+                    } else {
+                        fs.unlinkSync(filePath);
+                    }
+                } catch (e) {
+                    console.error(`Failed to delete session file ${f}:`, e.message);
+                }
+            }
+        });
+        addLog('Session credentials cleared (rules & active contacts preserved).');
+    } catch (e) {
+        addLog(`Error during session cleanup: ${e.message}`);
     }
 }
 
@@ -530,7 +572,7 @@ app.post('/api/logout', async (req, res) => {
             sock = null;
         }
         // Clear auth folder
-        const authStateDir = process.env.AUTH_DIR || path.join(__dirname, 'auth_info_baileys');
+        const authStateDir = AUTH_DIR;
         if (fs.existsSync(authStateDir)) {
             fs.rmSync(authStateDir, { recursive: true, force: true });
         }
@@ -548,7 +590,7 @@ app.post('/api/logout', async (req, res) => {
     } catch (err) {
         addLog(`Logout error: ${err.message}`);
         // Force clear even if logout() fails
-        const authStateDir = process.env.AUTH_DIR || path.join(__dirname, 'auth_info_baileys');
+        const authStateDir = AUTH_DIR;
         try { if (fs.existsSync(authStateDir)) fs.rmSync(authStateDir, { recursive: true, force: true }); } catch(e) {}
         try { if (fs.existsSync(SESSION_BACKUP_PATH)) fs.unlinkSync(SESSION_BACKUP_PATH); } catch(e) {}
         sock = null;
@@ -754,7 +796,7 @@ app.post('/api/groups/add-all', async (req, res) => {
 });
 
 app.post('/api/export-session', (req, res) => {
-    const authDir = process.env.AUTH_DIR || path.join(__dirname, 'auth_info_baileys');
+    const authDir = AUTH_DIR;
     try {
         if (!fs.existsSync(authDir)) {
             return res.status(404).json({ success: false, message: 'No session to export.' });
@@ -772,7 +814,7 @@ app.post('/api/export-session', (req, res) => {
 app.post('/api/import-session', async (req, res) => {
     const { session } = req.body;
     if (!session) return res.status(400).json({ success: false, message: 'No session data provided.' });
-    const authDir = process.env.AUTH_DIR || path.join(__dirname, 'auth_info_baileys');
+    const authDir = AUTH_DIR;
     try {
         const files = JSON.parse(Buffer.from(session, 'base64').toString('utf8'));
         if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
@@ -810,7 +852,7 @@ async function connectToWhatsApp() {
     isConnecting = true;
 
     // Use AUTH_DIR env var for Railway persistent volume, fallback to local
-    const authStateDir = process.env.AUTH_DIR || path.join(__dirname, 'auth_info_baileys');
+    const authStateDir = AUTH_DIR;
     
     // Attempt to restore session from /tmp backup if auth dir is empty or missing
     if (!fs.existsSync(authStateDir) || fs.readdirSync(authStateDir).length === 0) {
