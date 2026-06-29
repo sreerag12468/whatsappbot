@@ -1195,6 +1195,7 @@ async function connectToWhatsApp() {
 server.listen(PORT, () => {
     addLog(`Server is running on port ${PORT}`);
     addLog(`Dashboard URL: http://localhost:${PORT}`);
+    addLog(`Persistent storage path: ${persistentDir || 'None (using local fallback)'}`);
     connectToWhatsApp();
     startYTBot();
     startFBBot();
