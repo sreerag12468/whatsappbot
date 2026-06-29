@@ -24,7 +24,18 @@ is_railway = bool(
     os.environ.get("RAILWAY_SERVICE_ID") or
     os.environ.get("RAILWAY_PROJECT_ID")
 )
-if is_railway:
+
+# Detect persistent volume directory (e.g. /data on Railway)
+persistent_dir = os.environ.get("PERSISTENT_DIR")
+if not persistent_dir and os.path.exists("/data"):
+    persistent_dir = "/data"
+
+if persistent_dir:
+    TOKEN_FILE    = os.path.abspath(os.path.join(persistent_dir, "token.json"))
+    SETTINGS_FILE = os.path.abspath(os.path.join(persistent_dir, "yt_settings.json"))
+    QUOTA_FILE    = os.path.abspath(os.path.join(persistent_dir, "quota_log.json"))
+    SEEN_FILE     = os.path.abspath(os.path.join(persistent_dir, "seen_authors.json"))
+elif is_railway:
     TOKEN_FILE    = os.path.join(SCRIPT_DIR, "token.json")
     SETTINGS_FILE = os.path.join(SCRIPT_DIR, "settings.json")
     QUOTA_FILE    = os.path.join(SCRIPT_DIR, "quota_log.json")

@@ -145,7 +145,14 @@ function addLog(text) {
 // Keyword handlers
 // Allow overriding the keywords file path via env var (useful for Railway persistent volumes)
 const isRailway = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_SERVICE_ID);
-const AUTH_DIR = process.env.AUTH_DIR || (isRailway ? path.join(__dirname, 'auth_info_baileys') : path.join(__dirname, '..', 'auth_info_baileys'));
+
+// Detect persistent volume directory (e.g. /data on Railway)
+let persistentDir = process.env.PERSISTENT_DIR;
+if (!persistentDir && fs.existsSync('/data')) {
+    persistentDir = '/data';
+}
+
+const AUTH_DIR = process.env.AUTH_DIR || (persistentDir ? path.join(persistentDir, 'auth_info_baileys') : (isRailway ? path.join(__dirname, 'auth_info_baileys') : path.join(__dirname, '..', 'auth_info_baileys')));
 
 // Ensure persistent storage directory exists
 if (!fs.existsSync(AUTH_DIR)) {
@@ -156,8 +163,8 @@ if (!fs.existsSync(AUTH_DIR)) {
     }
 }
 
-const KEYWORDS_PATH = process.env.KEYWORDS_PATH || path.join(__dirname, 'keywords.json');
-const CONTACTS_FILE = process.env.CONTACTS_FILE || path.join(__dirname, 'active_contacts.json');
+const KEYWORDS_PATH = process.env.KEYWORDS_PATH || (persistentDir ? path.join(persistentDir, 'keywords.json') : (isRailway ? path.join(__dirname, 'keywords.json') : path.join(__dirname, '..', 'keywords.json')));
+const CONTACTS_FILE = process.env.CONTACTS_FILE || (persistentDir ? path.join(persistentDir, 'active_contacts.json') : (isRailway ? path.join(__dirname, 'active_contacts.json') : path.join(__dirname, '..', 'active_contacts.json')));
 
 // Initialize persistent keywords file if not present, copying from default template
 const DEFAULT_KEYWORDS_PATH = path.join(__dirname, 'keywords.json');
