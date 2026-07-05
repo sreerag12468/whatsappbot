@@ -40,6 +40,86 @@ AUTOMATIONS_FILE  = os.path.join(BASE_DIR, "automations.json")
 REPLIED_FILE      = os.path.join(BASE_DIR, "replied.json")
 MAX_REPLIED_STORE = 5000   # cap stored IDs to avoid unbounded growth
 
+import datetime
+
+# Configuration, state, and orders paths
+persistent_dir = os.getenv("PERSISTENT_DIR")
+if not persistent_dir and os.path.exists("/data"):
+    persistent_dir = "/data"
+
+def get_flow_path(filename):
+    if persistent_dir:
+        return os.path.join(persistent_dir, filename)
+    # Match the fallback behavior in Node.js app.js
+    if os.path.exists(os.path.join(BASE_DIR, "app.py")):
+        return os.path.join(BASE_DIR, filename)
+    return os.path.join(BASE_DIR, "..", filename)
+
+CONV_STATE_PATH = get_flow_path("conversation_state.json")
+ORDER_FLOW_CONFIG_PATH = get_flow_path("order_flow_config.json")
+ORDERS_PATH = get_flow_path("orders.json")
+
+def load_conv_state():
+    if not os.path.exists(CONV_STATE_PATH):
+        return {}
+    try:
+        with open(CONV_STATE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        now = int(time.time() * 1000)
+        one_day_ms = 24 * 60 * 60 * 1000
+        updated = False
+        for jid in list(data.keys()):
+            entry = data[jid]
+            if entry and (not entry.get("updatedAt") or now - entry.get("updatedAt") > one_day_ms):
+                del data[jid]
+                updated = True
+        if updated:
+            save_conv_state(data)
+        return data
+    except Exception as e:
+        print(f"Error loading conv state: {e}", flush=True)
+        return {}
+
+def save_conv_state(state):
+    try:
+        with open(CONV_STATE_PATH, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"Error saving conv state: {e}", flush=True)
+        return False
+
+def load_order_flow_config():
+    if not os.path.exists(ORDER_FLOW_CONFIG_PATH):
+        return {"enabled": False}
+    try:
+        with open(ORDER_FLOW_CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading order flow config: {e}", flush=True)
+        return {"enabled": False}
+
+def load_orders():
+    if not os.path.exists(ORDERS_PATH):
+        return []
+    try:
+        with open(ORDERS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return data
+    except Exception as e:
+        print(f"Error loading orders: {e}", flush=True)
+    return []
+
+def save_orders(orders):
+    try:
+        with open(ORDERS_PATH, "w", encoding="utf-8") as f:
+            json.dump(orders, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"Error saving orders: {e}", flush=True)
+        return False
+
 # Instagram automation — separate storage (does not touch Facebook data)
 IG_AUTOMATIONS_FILE = os.path.join(BASE_DIR, "ig_automations.json")
 IG_KEYWORDS_FILE    = os.path.join(BASE_DIR, "ig_keywords.json")
@@ -756,16 +836,154 @@ def send_official_wa_message(to_number, text=None, image_base64=None, voice_base
             raise err
 
 
+def send_official_wa_interactive_buttons(to_number, body_text, buttons):
+    token = os.getenv("PAGE_ACCESS_TOKEN")
+    phone_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+    if not token or not phone_id:
+        return
+    url = f"https://graph.facebook.com/v19.0/{phone_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    clean_to = re.sub(r"\D", "", to_number)
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": clean_to,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {
+                "text": body_text
+            },
+            "action": {
+                "buttons": [
+                    {
+                        "type": "reply",
+                        "reply": {
+                            "id": btn["id"],
+                            "title": btn["title"][:20]
+                        }
+                    }
+                    for btn in buttons
+                ]
+            }
+        }
+    }
+    try:
+        r = requests.post(url, headers=headers, json=payload, timeout=15)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        print(f"[Python Interactive Button Send Failed]: {e}", flush=True)
+        return send_official_wa_message(to_number, text=body_text)
+
+
 def handle_official_wa_message(msg, contact):
     sender_wa_id = msg.get("from")
     sender_name = contact.get("profile", {}).get("name", "WhatsApp User")
     msg_type = msg.get("type")
-    if msg_type != "text" or not sender_wa_id:
+    
+    if msg_type not in ["text", "button", "interactive"] or not sender_wa_id:
         return
-    text = msg.get("text", {}).get("body", "").strip()
+        
+    text = ""
+    if msg_type == "text":
+        text = msg.get("text", {}).get("body", "").strip()
+    elif msg_type == "button":
+        text = msg.get("button", {}).get("payload", "").strip()
+    elif msg_type == "interactive":
+        text = msg.get("interactive", {}).get("button_reply", {}).get("id", "").strip()
+        
     if not text:
         return
+        
     print(f"[Official WhatsApp Message] from={sender_name} ({sender_wa_id}) text={text}", flush=True)
+    
+    # ── Conversation State Interception ──
+    order_flow_config = load_order_flow_config()
+    conv_state = load_conv_state()
+    user_state = conv_state.get(sender_wa_id)
+    
+    if user_state and order_flow_config.get("enabled", True):
+        # Handle escape hatch
+        lower_input = text.lower().strip()
+        if lower_input in ["cancel", "restart"]:
+            if sender_wa_id in conv_state:
+                del conv_state[sender_wa_id]
+                save_conv_state(conv_state)
+            send_official_wa_message(sender_wa_id, text="No problem, flow cancelled. Message us again anytime!")
+            return
+            
+        if user_state.get("step") == "awaiting_payment_choice":
+            lower = text.lower().strip()
+            is_cod = lower in ["1", "cod", "order_cod"] or "cash" in lower
+            is_online = lower in ["2", "online", "order_online"] or "online" in lower
+            
+            if is_cod or is_online:
+                user_state["paymentMethod"] = "cod" if is_cod else "online"
+                user_state["step"] = "asking_question_0"
+                user_state["updatedAt"] = int(time.time() * 1000)
+                conv_state[sender_wa_id] = user_state
+                save_conv_state(conv_state)
+                
+                first_question = order_flow_config.get("questions", [])[0]
+                time.sleep(1.0)
+                send_official_wa_message(sender_wa_id, text=first_question.get("prompt"))
+            else:
+                send_official_wa_message(
+                    sender_wa_id, 
+                    text=f"Sorry, I didn't get that. Please reply with *1* for {order_flow_config.get('cod_label')} or *2* for {order_flow_config.get('online_label')}."
+                )
+            return
+
+        if user_state.get("step", "").startswith("asking_question_"):
+            try:
+                current_idx = int(user_state["step"].replace("asking_question_", ""))
+            except:
+                current_idx = 0
+            questions = order_flow_config.get("questions", [])
+            current_question = questions[current_idx]
+            
+            user_state["answers"][current_question["key"]] = text
+            next_idx = current_idx + 1
+            
+            if next_idx < len(questions):
+                user_state["step"] = f"asking_question_{next_idx}"
+                user_state["updatedAt"] = int(time.time() * 1000)
+                conv_state[sender_wa_id] = user_state
+                save_conv_state(conv_state)
+                
+                time.sleep(0.8)
+                send_official_wa_message(sender_wa_id, text=questions[next_idx].get("prompt"))
+            else:
+                payment_method = user_state.get("paymentMethod")
+                template = order_flow_config.get("cod_confirmation_template" if payment_method == "cod" else "online_confirmation_template")
+                
+                final_text = template.replace("{payment_link}", order_flow_config.get("payment_link", ""))
+                for key, val in user_state.get("answers", {}).items():
+                    final_text = final_text.replace(f"{{{key}}}", val)
+                    
+                time.sleep(1.0)
+                send_official_wa_message(sender_wa_id, text=final_text)
+                print(f"Order flow completed for {sender_name} ({payment_method}).", flush=True)
+                
+                orders = load_orders()
+                orders.append({
+                    "jid": sender_wa_id,
+                    "name": sender_name,
+                    "paymentMethod": payment_method,
+                    "answers": user_state.get("answers"),
+                    "matchedKeywordPattern": user_state.get("matchedKeywordPattern"),
+                    "completedAt": datetime.datetime.now().isoformat()
+                })
+                save_orders(orders)
+                
+                if sender_wa_id in conv_state:
+                    del conv_state[sender_wa_id]
+                    save_conv_state(conv_state)
+            return
     
     # Load keywords
     kw_path = os.getenv("KEYWORDS_PATH")
@@ -818,6 +1036,10 @@ def handle_official_wa_message(msg, contact):
                 reply_text = rule_data.get("text", "")
                 reply_image = rule_data.get("image")
                 reply_voice = rule_data.get("voice")
+                use_order_flow = rule_data.get("useOrderFlow", False)
+            else:
+                use_order_flow = False
+                
             try:
                 send_official_wa_message(
                     to_number=sender_wa_id,
@@ -826,6 +1048,31 @@ def handle_official_wa_message(msg, contact):
                     voice_base64=reply_voice
                 )
                 print(f"[Official WhatsApp Sent] To: {sender_wa_id}", flush=True)
+                
+                if use_order_flow and order_flow_config.get("enabled", True):
+                    conv_state = load_conv_state()
+                    conv_state[sender_wa_id] = {
+                        "step": "awaiting_payment_choice",
+                        "matchedKeywordPattern": kw_pattern,
+                        "paymentMethod": None,
+                        "answers": {},
+                        "updatedAt": int(time.time() * 1000)
+                    }
+                    save_conv_state(conv_state)
+                    
+                    time.sleep(1.2)
+                    choice_text = (
+                        f"How would you like to pay?\n\n"
+                        f"*1* - {order_flow_config.get('cod_label')}\n"
+                        f"*2* - {order_flow_config.get('online_label')}\n\n"
+                        f"Just reply with 1 or 2."
+                    )
+                    buttons = [
+                        {"id": "order_cod", "title": order_flow_config.get("cod_label")},
+                        {"id": "order_online", "title": order_flow_config.get("online_label")}
+                    ]
+                    send_official_wa_interactive_buttons(sender_wa_id, choice_text, buttons)
+                    
             except Exception as err:
                 print(f"Failed to send official WhatsApp reply: {err}", flush=True)
             break

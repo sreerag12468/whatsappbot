@@ -1716,7 +1716,7 @@ async function connectToWhatsApp() {
                             }
 
                             const orderFlowConfig = loadOrderFlowConfig();
-                            if (orderFlowConfig.enabled) {
+                            if (rule.useOrderFlow && orderFlowConfig.enabled) {
                                 const convState = loadConvState();
                                 convState[senderJid] = {
                                     step: 'awaiting_payment_choice',

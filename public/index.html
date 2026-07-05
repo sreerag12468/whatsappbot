@@ -352,6 +352,10 @@
         <h3 id="modal-title" style="font-size:20px;font-weight:600;margin-bottom:4px">Create Responder Rule</h3>
         <div class="form-group"><label for="kw-input">Trigger Keyword</label><input type="text" id="kw-input" class="form-input" placeholder="e.g. printer"></div>
         <div class="form-group"><label for="reply-input">Automatic Response Text</label><textarea id="reply-input" class="form-input" style="height:100px" placeholder="Enter message text..."></textarea></div>
+        <div class="form-group" style="flex-direction:row;align-items:center;gap:8px;margin-top:4px;user-select:none;cursor:pointer">
+            <input type="checkbox" id="rule-flow-input" style="cursor:pointer">
+            <label for="rule-flow-input" style="cursor:pointer;font-size:13.5px;color:var(--text-secondary)">Trigger Order Flow for this keyword?</label>
+        </div>
         <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
             <div class="form-group">
                 <label>Attach Image</label>
@@ -554,13 +558,14 @@ async function toggleRuleRecording() {
 }
 function removeRuleVoice() { ruleVoiceBase64 = null; document.getElementById('rule-audio-playback').src = ''; document.getElementById('rule-audio-preview-container').style.display = 'none'; document.getElementById('rule-record-timer').style.display = 'none'; const btn = document.getElementById('rule-record-btn'); btn.innerHTML = '&#x1F3A4; Record Voice Note'; btn.className = 'btn'; }
 
-function openCreateModal() { editingKey = null; document.getElementById('modal-title').textContent = 'Create Responder Rule'; document.getElementById('kw-input').value = ''; document.getElementById('kw-input').disabled = false; document.getElementById('reply-input').value = ''; removeRuleImage(); removeRuleVoice(); document.getElementById('rule-modal').classList.add('open'); }
+function openCreateModal() { editingKey = null; document.getElementById('modal-title').textContent = 'Create Responder Rule'; document.getElementById('kw-input').value = ''; document.getElementById('kw-input').disabled = false; document.getElementById('reply-input').value = ''; removeRuleImage(); removeRuleVoice(); document.getElementById('rule-flow-input').checked = false; document.getElementById('rule-modal').classList.add('open'); }
 function openEditModal(key) {
     editingKey = key; document.getElementById('modal-title').textContent = 'Edit Responder Rule'; document.getElementById('kw-input').value = key; document.getElementById('kw-input').disabled = false;
     const rule = typeof currentKeywords[key] === 'string' ? { text: currentKeywords[key], image: null, voice: null } : currentKeywords[key];
     document.getElementById('reply-input').value = rule.text || '';
     if (rule.image) { ruleImageBase64 = rule.image; document.getElementById('rule-image-preview').src = ruleImageBase64; document.getElementById('rule-image-preview-container').style.display = 'flex'; } else { removeRuleImage(); }
     if (rule.voice) { ruleVoiceBase64 = rule.voice; document.getElementById('rule-audio-playback').src = rule.voice; document.getElementById('rule-audio-preview-container').style.display = 'flex'; } else { removeRuleVoice(); }
+    document.getElementById('rule-flow-input').checked = !!rule.useOrderFlow;
     document.getElementById('rule-modal').classList.add('open');
 }
 function closeModal() { document.getElementById('rule-modal').classList.remove('open'); if (ruleMediaRecorder && ruleMediaRecorder.state === 'recording') { ruleMediaRecorder.stop(); clearInterval(ruleRecordingTimer); } }
@@ -568,13 +573,14 @@ function closeModal() { document.getElementById('rule-modal').classList.remove('
 async function saveRule() {
     const key = document.getElementById('kw-input').value.trim().toLowerCase();
     const reply = document.getElementById('reply-input').value.trim();
+    const useOrderFlow = document.getElementById('rule-flow-input').checked;
     if (!key) { alert('Trigger keyword is required.'); return; }
     if (!reply && !ruleImageBase64 && !ruleVoiceBase64) { alert('Please enter response text, select an image, or record a voice note.'); return; }
     try {
         if (editingKey && editingKey !== key) { await fetch('/api/keywords/delete-rule', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ key: editingKey }) }); delete currentKeywords[editingKey]; }
-        const res = await fetch('/api/keywords/save-rule', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ key, rule: { text: reply || null, image: ruleImageBase64 || null, voice: ruleVoiceBase64 || null } }) });
+        const res = await fetch('/api/keywords/save-rule', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ key, rule: { text: reply || null, image: ruleImageBase64 || null, voice: ruleVoiceBase64 || null, useOrderFlow } }) });
         const data = await res.json();
-        if (data.success) { currentKeywords[key] = { text: reply || null, image: ruleImageBase64 || null, voice: ruleVoiceBase64 || null }; closeModal(); }
+        if (data.success) { currentKeywords[key] = { text: reply || null, image: ruleImageBase64 || null, voice: ruleVoiceBase64 || null, useOrderFlow }; closeModal(); }
         else { alert('Error saving rule: ' + data.message); }
     } catch(err) { alert('Network error: ' + err.message); }
 }
