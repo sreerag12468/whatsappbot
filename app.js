@@ -271,6 +271,9 @@ if (!fs.existsSync(AUTH_DIR)) {
 
 const KEYWORDS_PATH = process.env.KEYWORDS_PATH || (persistentDir ? path.join(persistentDir, 'keywords.json') : (isRailway ? path.join(__dirname, 'keywords.json') : path.join(__dirname, '..', 'keywords.json')));
 const CONTACTS_FILE = process.env.CONTACTS_FILE || (persistentDir ? path.join(persistentDir, 'active_contacts.json') : (isRailway ? path.join(__dirname, 'active_contacts.json') : path.join(__dirname, '..', 'active_contacts.json')));
+const CONV_STATE_PATH = process.env.CONV_STATE_PATH || (persistentDir ? path.join(persistentDir, 'conversation_state.json') : (isRailway ? path.join(__dirname, 'conversation_state.json') : path.join(__dirname, '..', 'conversation_state.json')));
+const ORDER_FLOW_CONFIG_PATH = process.env.ORDER_FLOW_CONFIG_PATH || (persistentDir ? path.join(persistentDir, 'order_flow_config.json') : (isRailway ? path.join(__dirname, 'order_flow_config.json') : path.join(__dirname, '..', 'order_flow_config.json')));
+const ORDERS_PATH = process.env.ORDERS_PATH || (persistentDir ? path.join(persistentDir, 'orders.json') : (isRailway ? path.join(__dirname, 'orders.json') : path.join(__dirname, '..', 'orders.json')));
 
 // Initialize persistent keywords file if not present, copying from default template
 const DEFAULT_KEYWORDS_PATH = path.join(__dirname, 'keywords.json');
@@ -296,6 +299,48 @@ if (!fs.existsSync(CONTACTS_FILE)) {
     }
 }
 
+// Ensure persistent conversation state file exists
+if (!fs.existsSync(CONV_STATE_PATH)) {
+    try {
+        fs.writeFileSync(CONV_STATE_PATH, '{}', 'utf8');
+    } catch (e) {
+        console.error('Failed to initialize conversation_state.json:', e);
+    }
+}
+
+// Ensure persistent order flow config file exists
+const defaultOrderFlowConfig = {
+    "enabled": true,
+    "payment_link": "https://your-payment-link-here.com",
+    "cod_label": "Cash on Delivery",
+    "online_label": "Online Payment",
+    "questions": [
+        { "key": "name", "prompt": "What's your full name?" },
+        { "key": "address", "prompt": "What's your full delivery address?" },
+        { "key": "pincode", "prompt": "What's your PIN code?" },
+        { "key": "phone", "prompt": "What's the best phone number to reach you on?" }
+    ],
+    "cod_confirmation_template": "Thanks {name}! Your Cash on Delivery order is confirmed.\nAddress: {address}\nPIN: {pincode}\nPhone: {phone}\nWe'll contact you soon to confirm delivery.",
+    "online_confirmation_template": "Thanks {name}! Please complete payment here: {payment_link}\nOnce paid, we'll ship to:\nAddress: {address}\nPIN: {pincode}\nPhone: {phone}"
+};
+
+if (!fs.existsSync(ORDER_FLOW_CONFIG_PATH)) {
+    try {
+        fs.writeFileSync(ORDER_FLOW_CONFIG_PATH, JSON.stringify(defaultOrderFlowConfig, null, 2), 'utf8');
+    } catch (e) {
+        console.error('Failed to initialize order_flow_config.json:', e);
+    }
+}
+
+// Ensure persistent orders file exists
+if (!fs.existsSync(ORDERS_PATH)) {
+    try {
+        fs.writeFileSync(ORDERS_PATH, '[]', 'utf8');
+    } catch (e) {
+        console.error('Failed to initialize orders.json:', e);
+    }
+}
+
 function loadKeywords() {
     try {
         if (fs.existsSync(KEYWORDS_PATH)) {
@@ -313,6 +358,92 @@ function saveKeywords(kwMap) {
         return true;
     } catch (e) {
         addLog(`Error saving keywords: ${e.message}`);
+        return false;
+    }
+}
+
+function loadConvState() {
+    try {
+        if (fs.existsSync(CONV_STATE_PATH)) {
+            const data = JSON.parse(fs.readFileSync(CONV_STATE_PATH, 'utf8'));
+            const now = Date.now();
+            const oneDayMs = 24 * 60 * 60 * 1000;
+            let updated = false;
+            for (const jid of Object.keys(data)) {
+                const entry = data[jid];
+                if (entry && (!entry.updatedAt || now - entry.updatedAt > oneDayMs)) {
+                    delete data[jid];
+                    updated = true;
+                }
+            }
+            if (updated) {
+                fs.writeFileSync(CONV_STATE_PATH, JSON.stringify(data, null, 2), 'utf8');
+            }
+            return data;
+        }
+    } catch (e) {
+        addLog(`Error loading conversation state: ${e.message}`);
+    }
+    return {};
+}
+
+function saveConvState(state) {
+    try {
+        fs.writeFileSync(CONV_STATE_PATH, JSON.stringify(state, null, 2), 'utf8');
+        return true;
+    } catch (e) {
+        addLog(`Error saving conversation state: ${e.message}`);
+        return false;
+    }
+}
+
+function clearConvState(jid) {
+    const state = loadConvState();
+    if (state[jid]) {
+        delete state[jid];
+        saveConvState(state);
+    }
+}
+
+function loadOrderFlowConfig() {
+    try {
+        if (fs.existsSync(ORDER_FLOW_CONFIG_PATH)) {
+            return JSON.parse(fs.readFileSync(ORDER_FLOW_CONFIG_PATH, 'utf8'));
+        }
+    } catch (e) {
+        addLog(`Error loading order flow config: ${e.message}`);
+    }
+    return defaultOrderFlowConfig;
+}
+
+function saveOrderFlowConfig(config) {
+    try {
+        fs.writeFileSync(ORDER_FLOW_CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8');
+        return true;
+    } catch (e) {
+        addLog(`Error saving order flow config: ${e.message}`);
+        return false;
+    }
+}
+
+function loadOrders() {
+    try {
+        if (fs.existsSync(ORDERS_PATH)) {
+            const data = JSON.parse(fs.readFileSync(ORDERS_PATH, 'utf8'));
+            if (Array.isArray(data)) return data;
+        }
+    } catch (e) {
+        addLog(`Error loading orders: ${e.message}`);
+    }
+    return [];
+}
+
+function saveOrders(orders) {
+    try {
+        fs.writeFileSync(ORDERS_PATH, JSON.stringify(orders, null, 2), 'utf8');
+        return true;
+    } catch (e) {
+        addLog(`Error saving orders: ${e.message}`);
         return false;
     }
 }
@@ -606,6 +737,28 @@ app.post('/api/keywords', (req, res) => {
         io.emit('keywords', kwMap);
     } else {
         res.status(500).json({ success: false, message: 'Failed to save keywords.' });
+    }
+});
+
+app.get('/api/order-flow', (req, res) => {
+    res.json(loadOrderFlowConfig());
+});
+
+app.post('/api/order-flow', (req, res) => {
+    const config = req.body;
+    if (!config || typeof config.payment_link !== 'string' || !Array.isArray(config.questions) || config.questions.length === 0) {
+        return res.status(400).json({ success: false, message: 'Invalid config. payment_link must be a string and questions must be a non-empty array.' });
+    }
+    for (const q of config.questions) {
+        if (!q || typeof q.key !== 'string' || typeof q.prompt !== 'string') {
+            return res.status(400).json({ success: false, message: 'Each question must have a "key" and "prompt" (string).' });
+        }
+    }
+    if (saveOrderFlowConfig(config)) {
+        res.json({ success: true, message: 'Order flow configuration updated successfully.' });
+        io.emit('order-flow', config);
+    } else {
+        res.status(500).json({ success: false, message: 'Failed to save order flow configuration.' });
     }
 });
 
@@ -1339,6 +1492,10 @@ async function connectToWhatsApp() {
                     text = msg.message.conversation;
                 } else if (messageType === 'extendedTextMessage') {
                     text = msg.message.extendedTextMessage.text;
+                } else if (msg.message?.buttonsResponseMessage) {
+                    text = msg.message.buttonsResponseMessage.selectedButtonId || '';
+                } else if (msg.message?.templateButtonReplyMessage) {
+                    text = msg.message.templateButtonReplyMessage.selectedId || '';
                 }
                 
                 if (!text) continue;
@@ -1349,6 +1506,99 @@ async function connectToWhatsApp() {
                 // Store the original message for quoted reply
                 const quotedMsg = msg;
                 
+                // --- Conversation State Interception ---
+                const orderFlowConfig = loadOrderFlowConfig();
+                const convState = loadConvState();
+                const userState = convState[senderJid];
+
+                if (userState && orderFlowConfig.enabled) {
+                    try { await sock.readMessages([msg.key]); } catch (e) {}
+
+                    let incomingText = text.trim();
+                    const buttonReply = msg.message?.buttonsResponseMessage?.selectedButtonId;
+                    if (buttonReply) incomingText = buttonReply;
+
+                    const lowerInput = incomingText.toLowerCase();
+                    if (lowerInput === 'cancel' || lowerInput === 'restart') {
+                        delete convState[senderJid];
+                        saveConvState(convState);
+                        await sock.sendMessage(senderJid, { text: "No problem, flow cancelled. Message us again anytime!" });
+                        continue;
+                    }
+
+                    if (userState.step === 'awaiting_payment_choice') {
+                        const lower = incomingText.toLowerCase();
+                        const isCod = lower === '1' || lower === 'cod' || lower === 'order_cod' || lower.includes('cash');
+                        const isOnline = lower === '2' || lower === 'online' || lower === 'order_online' || lower.includes('online');
+
+                        if (isCod || isOnline) {
+                            userState.paymentMethod = isCod ? 'cod' : 'online';
+                            userState.step = 'asking_question_0';
+                            userState.updatedAt = Date.now();
+                            convState[senderJid] = userState;
+                            saveConvState(convState);
+
+                            const firstQuestion = orderFlowConfig.questions[0];
+                            const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+                            await delay(1000);
+                            await sock.sendMessage(senderJid, { text: firstQuestion.prompt });
+                        } else {
+                            await sock.sendMessage(senderJid, {
+                                text: `Sorry, I didn't get that. Please reply with *1* for ${orderFlowConfig.cod_label} or *2* for ${orderFlowConfig.online_label}.`
+                            });
+                        }
+                        continue;
+                    }
+
+                    if (userState.step.startsWith('asking_question_')) {
+                        const currentIdx = parseInt(userState.step.replace('asking_question_', ''), 10);
+                        const currentQuestion = orderFlowConfig.questions[currentIdx];
+
+                        userState.answers[currentQuestion.key] = incomingText;
+                        const nextIdx = currentIdx + 1;
+                        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+                        if (nextIdx < orderFlowConfig.questions.length) {
+                            userState.step = `asking_question_${nextIdx}`;
+                            userState.updatedAt = Date.now();
+                            convState[senderJid] = userState;
+                            saveConvState(convState);
+
+                            await delay(800);
+                            await sock.sendMessage(senderJid, { text: orderFlowConfig.questions[nextIdx].prompt });
+                        } else {
+                            // All questions answered — send the final confirmation.
+                            const template = userState.paymentMethod === 'cod'
+                                ? orderFlowConfig.cod_confirmation_template
+                                : orderFlowConfig.online_confirmation_template;
+
+                            let finalText = template.replace('{payment_link}', orderFlowConfig.payment_link);
+                            for (const [key, value] of Object.entries(userState.answers)) {
+                                finalText = finalText.split(`{${key}}`).join(value);
+                            }
+
+                            await delay(1000);
+                            await sock.sendMessage(senderJid, { text: finalText });
+                            addLog(`Order flow completed for ${senderName} (${userState.paymentMethod}).`);
+
+                            const orders = loadOrders();
+                            orders.push({
+                                jid: senderJid,
+                                name: senderName,
+                                paymentMethod: userState.paymentMethod,
+                                answers: userState.answers,
+                                matchedKeywordPattern: userState.matchedKeywordPattern,
+                                completedAt: new Date().toISOString()
+                            });
+                            saveOrders(orders);
+
+                            delete convState[senderJid];
+                            saveConvState(convState);
+                        }
+                        continue;
+                    }
+                }
+
                 // Match keywords
                 const kwMap = loadKeywords();
                 const cleanText = text.trim().toLowerCase();
@@ -1463,6 +1713,43 @@ async function connectToWhatsApp() {
                                 await sock.sendMessage(senderJid, { text: replyText });
                                 addLog(`Auto-reply sent text to ${senderName}.`);
                                 
+                            }
+
+                            const orderFlowConfig = loadOrderFlowConfig();
+                            if (orderFlowConfig.enabled) {
+                                const convState = loadConvState();
+                                convState[senderJid] = {
+                                    step: 'awaiting_payment_choice',
+                                    matchedKeywordPattern: kwPattern,
+                                    paymentMethod: null,
+                                    answers: {},
+                                    updatedAt: Date.now()
+                                };
+                                saveConvState(convState);
+
+                                await delay(1200);
+                                await setPresence('composing');
+                                await delay(1000);
+
+                                const choiceText =
+                                    `How would you like to pay?\n\n` +
+                                    `*1* - ${orderFlowConfig.cod_label}\n` +
+                                    `*2* - ${orderFlowConfig.online_label}\n\n` +
+                                    `Just reply with 1 or 2.`;
+
+                                try {
+                                    await sock.sendMessage(senderJid, {
+                                        text: choiceText,
+                                        buttons: [
+                                            { buttonId: 'order_cod', buttonText: { displayText: orderFlowConfig.cod_label }, type: 1 },
+                                            { buttonId: 'order_online', buttonText: { displayText: orderFlowConfig.online_label }, type: 1 }
+                                        ],
+                                        headerType: 1
+                                    });
+                                } catch (btnErr) {
+                                    addLog(`Buttons not supported/failed (${btnErr.message}), falling back to plain numbered text.`);
+                                    await sock.sendMessage(senderJid, { text: choiceText });
+                                }
                                 await setPresence('paused');
                             }
 
