@@ -617,6 +617,41 @@ def build_ig_dm_body(auto, username=""):
     return "\n\n".join(p for p in parts if p)
 
 
+def transcode_to_ogg_opus(base64_data):
+    if "," in base64_data:
+        base64_data = base64_data.split(",")[1]
+    input_bytes = base64.b64decode(base64_data)
+    
+    import tempfile
+    import subprocess
+    
+    with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as infile:
+        infile.write(input_bytes)
+        in_path = infile.name
+        
+    out_path = in_path.replace(".webm", ".ogg")
+    
+    try:
+        cmd = ["ffmpeg", "-y", "-i", in_path, "-c:a", "libopus", "-b:a", "16k", "-ac", "1", "-ar", "48000", out_path]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        with open(out_path, "rb") as outfile:
+            transcoded_bytes = outfile.read()
+        transcoded_b64 = base64.b64encode(transcoded_bytes).decode("utf-8")
+        
+        try: os.remove(in_path)
+        except: pass
+        try: os.remove(out_path)
+        except: pass
+        return transcoded_b64
+    except Exception as e:
+        print(f"[Python Audio Transcode] FFmpeg failed or not found: {e}", flush=True)
+        try: os.remove(in_path)
+        except: pass
+        try: os.remove(out_path)
+        except: pass
+        return base64_data
+
+
 def upload_wa_media(phone_id, token, base64_data, mime_type="image/jpeg"):
     url = f"https://graph.facebook.com/v19.0/{phone_id}/media"
     headers = {
@@ -668,12 +703,9 @@ def send_official_wa_message(to_number, text=None, image_base64=None, voice_base
         if text:
             payload["image"]["caption"] = text
     elif voice_base64 and isinstance(voice_base64, str) and len(voice_base64) > 100:
+        transcoded_b64 = transcode_to_ogg_opus(voice_base64)
         mime = "audio/ogg"
-        if "audio/webm" in voice_base64:
-            mime = "audio/webm"
-        elif "audio/mp3" in voice_base64:
-            mime = "audio/mp3"
-        media_id = upload_wa_media(phone_id, token, voice_base64, mime)
+        media_id = upload_wa_media(phone_id, token, transcoded_b64, mime)
         payload["type"] = "audio"
         payload["audio"] = {"id": media_id}
     else:

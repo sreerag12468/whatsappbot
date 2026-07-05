@@ -92,14 +92,12 @@ async function sendOfficialWAMessage(phoneId, token, number, text, image, voice)
         payload.image = { id: mediaId };
         if (text) payload.image.caption = text;
     } else if (voice && typeof voice === 'string' && voice.length > 100) {
-        let mimeType = 'audio/ogg';
-        let ext = 'ogg';
-        const mimeMatch = voice.match(/^data:([^;]+);base64,/);
-        if (mimeMatch) {
-            mimeType = mimeMatch[1];
-            ext = mimeType.split('/')[1] || 'ogg';
-        }
-        const mediaId = await uploadWAMedia(phoneId, token, voice, `audio_${Date.now()}.${ext}`, mimeType);
+        const { filePath } = await convertToOggOpusFile(voice);
+        const dataBuffer = fs.readFileSync(filePath);
+        const base64Ogg = dataBuffer.toString('base64');
+        try { fs.unlinkSync(filePath); } catch (e) {}
+
+        const mediaId = await uploadWAMedia(phoneId, token, base64Ogg, `audio_${Date.now()}.ogg`, 'audio/ogg');
         payload.type = 'audio';
         payload.audio = { id: mediaId };
     } else {
