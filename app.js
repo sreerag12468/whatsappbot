@@ -48,6 +48,79 @@ function restoreSession(authDir) {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Official WhatsApp Cloud API Helpers
+async function uploadWAMedia(phoneId, token, base64Data, filename, mimeType) {
+    const url = `https://graph.facebook.com/v19.0/${phoneId}/media`;
+    const cleanB64 = base64Data.split(',')[1] || base64Data;
+    const blob = new Blob([Buffer.from(cleanB64, 'base64')], { type: mimeType });
+    const form = new FormData();
+    form.append('file', blob, filename);
+    form.append('messaging_product', 'whatsapp');
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        },
+        body: form
+    });
+    if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Media upload failed: ${errText}`);
+    }
+    const resData = await response.json();
+    return resData.id;
+}
+
+async function sendOfficialWAMessage(phoneId, token, number, text, image, voice) {
+    const url = `https://graph.facebook.com/v19.0/${phoneId}/messages`;
+    const cleanTo = number.replace(/\D/g, '');
+    const payload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: cleanTo
+    };
+    if (image) {
+        let mimeType = 'image/jpeg';
+        let ext = 'jpg';
+        const mimeMatch = image.match(/^data:([^;]+);base64,/);
+        if (mimeMatch) {
+            mimeType = mimeMatch[1];
+            ext = mimeType.split('/')[1] || 'jpg';
+        }
+        const mediaId = await uploadWAMedia(phoneId, token, image, `file_${Date.now()}.${ext}`, mimeType);
+        payload.type = 'image';
+        payload.image = { id: mediaId };
+        if (text) payload.image.caption = text;
+    } else if (voice) {
+        let mimeType = 'audio/ogg';
+        let ext = 'ogg';
+        const mimeMatch = voice.match(/^data:([^;]+);base64,/);
+        if (mimeMatch) {
+            mimeType = mimeMatch[1];
+            ext = mimeType.split('/')[1] || 'ogg';
+        }
+        const mediaId = await uploadWAMedia(phoneId, token, voice, `audio_${Date.now()}.${ext}`, mimeType);
+        payload.type = 'audio';
+        payload.audio = { id: mediaId };
+    } else {
+        payload.type = 'text';
+        payload.text = { body: text, preview_url: true };
+    }
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Message delivery failed: ${errText}`);
+    }
+    return await response.json();
+}
+
 // Helper function to transcode audio to strict OGG/Opus format using FFmpeg and return the file path
 async function convertToOggOpusFile(base64Data) {
     const tempDir = path.join(__dirname, 'temp_audio');
@@ -617,6 +690,21 @@ app.post('/api/send', async (req, res) => {
         return res.status(400).json({ success: false, message: 'Recipient number is required.' });
     }
 
+    const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const metaToken = process.env.PAGE_ACCESS_TOKEN;
+
+    if (phoneId && metaToken) {
+        try {
+            addLog(`Manual message sending request to official Meta WhatsApp: ${number}`);
+            await sendOfficialWAMessage(phoneId, metaToken, number, text, image, voice);
+            addLog(`Message successfully sent via Meta WhatsApp Cloud API.`);
+            return res.json({ success: true, message: 'Message sent successfully via Meta Cloud API.' });
+        } catch (err) {
+            addLog(`Failed to send message via Meta WhatsApp: ${err.message}`);
+            return res.status(500).json({ success: false, message: `Failed to send message: ${err.message}` });
+        }
+    }
+
     if (connectionStatus !== 'Connected' || !sock) {
         return res.status(503).json({ success: false, message: 'WhatsApp bot is not connected.' });
     }
@@ -981,6 +1069,17 @@ function flushChatMap() {
 }
 
 async function connectToWhatsApp() {
+    const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const metaToken = process.env.PAGE_ACCESS_TOKEN;
+    if (phoneId && metaToken) {
+        connectionStatus = 'Connected';
+        qrCodeBase64 = null;
+        io.emit('status', { status: connectionStatus });
+        addLog('Official WhatsApp Cloud API mode is enabled. Node socket is running in Webhook listener mode.');
+        isConnecting = false;
+        return;
+    }
+
     if (isConnecting) return;
     isConnecting = true;
 

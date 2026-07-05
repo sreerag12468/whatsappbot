@@ -3,6 +3,8 @@ import time
 import requests
 import os
 import json
+import re
+import base64
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -613,6 +615,144 @@ def build_ig_dm_body(auto, username=""):
     if follow_up:
         parts.append(follow_up)
     return "\n\n".join(p for p in parts if p)
+
+
+def upload_wa_media(phone_id, token, base64_data, mime_type="image/jpeg"):
+    url = f"https://graph.facebook.com/v19.0/{phone_id}/media"
+    headers = {
+        "Authorization": f"Bearer {token}"
+    }
+    if "," in base64_data:
+        base64_data = base64_data.split(",")[1]
+    file_bytes = base64.b64decode(base64_data)
+    files = {
+        "file": ("media_file", file_bytes, mime_type)
+    }
+    data = {
+        "messaging_product": "whatsapp"
+    }
+    r = requests.post(url, headers=headers, files=files, data=data, timeout=20)
+    r.raise_for_status()
+    return r.json().get("id")
+
+
+def send_official_wa_message(to_number, text=None, image_base64=None, voice_base64=None):
+    token = os.getenv("PAGE_ACCESS_TOKEN")
+    phone_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+    if not token or not phone_id:
+        raise Exception("WhatsApp Meta API credentials (WHATSAPP_PHONE_NUMBER_ID) missing.")
+    url = f"https://graph.facebook.com/v19.0/{phone_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    clean_to = re.sub(r"\D", "", to_number)
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": clean_to
+    }
+    if image_base64:
+        mime = "image/jpeg"
+        if "image/png" in image_base64:
+            mime = "image/png"
+        elif "image/webp" in image_base64:
+            mime = "image/webp"
+        media_id = upload_wa_media(phone_id, token, image_base64, mime)
+        payload["type"] = "image"
+        payload["image"] = {"id": media_id}
+        if text:
+            payload["image"]["caption"] = text
+    elif voice_base64:
+        mime = "audio/ogg"
+        if "audio/webm" in voice_base64:
+            mime = "audio/webm"
+        elif "audio/mp3" in voice_base64:
+            mime = "audio/mp3"
+        media_id = upload_wa_media(phone_id, token, voice_base64, mime)
+        payload["type"] = "audio"
+        payload["audio"] = {"id": media_id}
+    else:
+        payload["type"] = "text"
+        payload["text"] = {"body": text, "preview_url": True}
+    r = requests.post(url, headers=headers, json=payload, timeout=15)
+    r.raise_for_status()
+    return r.json()
+
+
+def handle_official_wa_message(msg, contact):
+    sender_wa_id = msg.get("from")
+    sender_name = contact.get("profile", {}).get("name", "WhatsApp User")
+    msg_type = msg.get("type")
+    if msg_type != "text" or not sender_wa_id:
+        return
+    text = msg.get("text", {}).get("body", "").strip()
+    if not text:
+        return
+    print(f"[Official WhatsApp Message] from={sender_name} ({sender_wa_id}) text={text}")
+    
+    # Load keywords
+    kw_path = os.getenv("KEYWORDS_PATH")
+    if not kw_path:
+        for p in ["/data/keywords.json", "keywords.json", "../keywords.json"]:
+            if os.path.exists(p):
+                kw_path = p
+                break
+        if not kw_path:
+            kw_path = os.path.join(BASE_DIR, "keywords.json")
+    if not os.path.exists(kw_path):
+        return
+    try:
+        with open(kw_path, "r", encoding="utf-8") as f:
+            kw_map = json.load(f)
+    except Exception as e:
+        print(f"Error loading WhatsApp keywords: {e}")
+        return
+        
+    clean_text = text.lower().strip()
+    for kw_pattern, rule_data in kw_map.items():
+        keywords = [k.strip().lower() for k in kw_pattern.split(",") if k.strip()]
+        is_match = False
+        for kw in keywords:
+            if clean_text == kw:
+                is_match = True
+                break
+            pattern = ""
+            if kw and kw[0].isalnum():
+                pattern += r"\b"
+            pattern += re.escape(kw)
+            if kw and kw[-1].isalnum():
+                pattern += r"\b"
+            try:
+                if re.search(pattern, clean_text, re.IGNORECASE):
+                    is_match = True
+                    break
+            except Exception:
+                if kw in clean_text:
+                    is_match = True
+                    break
+        if is_match:
+            print(f"[Official WhatsApp Match] Pattern: {kw_pattern}")
+            reply_text = ""
+            reply_image = None
+            reply_voice = None
+            if isinstance(rule_data, str):
+                reply_text = rule_data
+            elif isinstance(rule_data, dict):
+                reply_text = rule_data.get("text", "")
+                reply_image = rule_data.get("image")
+                reply_voice = rule_data.get("voice")
+            try:
+                send_official_wa_message(
+                    to_number=sender_wa_id,
+                    text=reply_text,
+                    image_base64=reply_image,
+                    voice_base64=reply_voice
+                )
+                print(f"[Official WhatsApp Sent] To: {sender_wa_id}")
+            except Exception as err:
+                print(f"Failed to send official WhatsApp reply: {err}")
+            break
 
 
 def reply_to_ig_comment(comment_id, message):
@@ -2160,6 +2300,17 @@ def webhook():
                     handle_ig_mention(value)
             for event in entry.get("messaging", []):
                 handle_ig_messaging(event)
+            continue
+
+        # WhatsApp webhooks (official Meta Cloud API)
+        if obj == "whatsapp_business_account":
+            for change in entry.get("changes", []):
+                if change.get("field") == "messages":
+                    val = change.get("value", {})
+                    for msg in val.get("messages", []):
+                        contacts = val.get("contacts", [])
+                        contact = contacts[0] if contacts else {}
+                        handle_official_wa_message(msg, contact)
             continue
 
         # Facebook webhooks (unchanged)
