@@ -97,7 +97,7 @@ async function sendOfficialWAMessage(phoneId, token, number, text, image, voice)
         const base64Ogg = dataBuffer.toString('base64');
         try { fs.unlinkSync(filePath); } catch (e) {}
 
-        const mediaId = await uploadWAMedia(phoneId, token, base64Ogg, `audio_${Date.now()}.ogg`, 'audio/ogg');
+        const mediaId = await uploadWAMedia(phoneId, token, base64Ogg, `audio_${Date.now()}.ogg`, 'audio/ogg; codecs=opus');
         payload.type = 'audio';
         payload.audio = { id: mediaId };
         

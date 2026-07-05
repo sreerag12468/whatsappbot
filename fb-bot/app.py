@@ -719,7 +719,7 @@ def send_official_wa_message(to_number, text=None, image_base64=None, voice_base
             
     elif voice_base64 and isinstance(voice_base64, str) and len(voice_base64) > 100:
         transcoded_b64 = transcode_to_ogg_opus(voice_base64)
-        media_id = upload_wa_media(phone_id, token, transcoded_b64, "audio/ogg")
+        media_id = upload_wa_media(phone_id, token, transcoded_b64, "audio/ogg; codecs=opus")
         payload["type"] = "audio"
         payload["audio"] = {"id": media_id}
         
