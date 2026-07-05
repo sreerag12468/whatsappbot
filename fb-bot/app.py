@@ -689,7 +689,7 @@ def handle_official_wa_message(msg, contact):
     text = msg.get("text", {}).get("body", "").strip()
     if not text:
         return
-    print(f"[Official WhatsApp Message] from={sender_name} ({sender_wa_id}) text={text}")
+    print(f"[Official WhatsApp Message] from={sender_name} ({sender_wa_id}) text={text}", flush=True)
     
     # Load keywords
     kw_path = os.getenv("KEYWORDS_PATH")
@@ -732,7 +732,7 @@ def handle_official_wa_message(msg, contact):
                     is_match = True
                     break
         if is_match:
-            print(f"[Official WhatsApp Match] Pattern: {kw_pattern}")
+            print(f"[Official WhatsApp Match] Pattern: {kw_pattern}", flush=True)
             reply_text = ""
             reply_image = None
             reply_voice = None
@@ -749,9 +749,9 @@ def handle_official_wa_message(msg, contact):
                     image_base64=reply_image,
                     voice_base64=reply_voice
                 )
-                print(f"[Official WhatsApp Sent] To: {sender_wa_id}")
+                print(f"[Official WhatsApp Sent] To: {sender_wa_id}", flush=True)
             except Exception as err:
-                print(f"Failed to send official WhatsApp reply: {err}")
+                print(f"Failed to send official WhatsApp reply: {err}", flush=True)
             break
 
 
