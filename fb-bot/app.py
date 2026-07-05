@@ -2286,6 +2286,7 @@ def verify():
 def webhook():
     data = request.json
     obj  = data.get("object")
+    print(f"[Webhook Received] object={obj} payload={json.dumps(data)}")
     for entry in data.get("entry", []):
         # Instagram webhooks (separate automation engine)
         if obj == "instagram":
