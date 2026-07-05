@@ -1,5 +1,4 @@
-import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason, getUrlInfo } from '@whiskeysockets/baileys';
-import { getLinkPreview } from 'link-preview-js';
+import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import express from 'express';
 import http from 'http';
@@ -683,40 +682,8 @@ app.post('/api/send', async (req, res) => {
 
         // 3. Send text message if only text is provided (no image, no voice)
         if (text && !image && !voice) {
-            // Check for links and get preview if any
-            const urlRegex = /https?:\/\/[^\s]+/gi;
-            const urls = text.match(urlRegex);
-            let linkPreview = undefined;
-            
-            if (urls && urls.length > 0) {
-                // Give time for the link to load as requested by the user
-                addLog(`Link detected in manual message. Delaying for 3 seconds to let the link load...`);
-                await new Promise(resolve => setTimeout(resolve, 3000));
-                
-                try {
-                    linkPreview = await getUrlInfo(text, {
-                        uploadImage: sock.waUploadToServer
-                    });
-                } catch (urlErr) {
-                    addLog(`Failed to generate link preview using getUrlInfo: ${urlErr.message}`);
-                    // Fallback to link-preview-js if getUrlInfo fails
-                    try {
-                        const previewData = await getLinkPreview(urls[0]);
-                        linkPreview = {
-                            'canonical-url': previewData.url || urls[0],
-                            'matched-text': urls[0],
-                            title: previewData.title || '',
-                            description: previewData.description || '',
-                        };
-                    } catch (fallbackErr) {}
-                }
-            }
-            
-            const msgContent = { text };
-            if (linkPreview) {
-                msgContent.linkPreview = linkPreview;
-            }
-            await sock.sendMessage(jid, msgContent);
+            // Baileys v7 auto-generates link previews via generateWAMessageContent
+            await sock.sendMessage(jid, { text });
             addLog(`Text message successfully sent to: ${jid}`);
         }
 
@@ -802,6 +769,152 @@ app.post('/api/groups/add-all', async (req, res) => {
     }
 });
 
+// ── /api/groups/add-all-chats: add every open chat thread (saved + unsaved) ─────
+app.post('/api/groups/add-all-chats', async (req, res) => {
+    const { groupLink } = req.body;
+    if (!groupLink) {
+        return res.status(400).json({ success: false, message: 'Group link is required.' });
+    }
+    if (connectionStatus !== 'Connected' || !sock) {
+        return res.status(503).json({ success: false, message: 'WhatsApp bot is not connected.' });
+    }
+    const inviteCode = parseInviteCode(groupLink);
+    if (!inviteCode) {
+        return res.status(400).json({ success: false, message: 'Invalid WhatsApp group link.' });
+    }
+
+    // Flush chatMap into active_contacts.json before proceeding
+    flushChatMap();
+
+    // Respond immediately so the HTTP request doesn't time out
+    res.json({ success: true, message: 'Add-all-chats process started in background.' });
+
+    try {
+        addLog(`[Group Add Chats] Resolving group invite code: ${inviteCode}`);
+        let groupJid = null;
+        try {
+            const inviteInfo = await sock.groupGetInviteInfo(inviteCode);
+            groupJid = inviteInfo.id;
+            addLog(`[Group Add Chats] Group JID: ${groupJid} (${inviteInfo.subject})`);
+        } catch (e) {
+            groupJid = await sock.groupAcceptInvite(inviteCode);
+            addLog(`[Group Add Chats] Group JID (after join): ${groupJid}`);
+        }
+        if (!groupJid) { addLog('[Group Add Chats] Could not resolve group JID.'); return; }
+
+        const contacts = loadActiveContacts();
+        // Only process individual chats (not groups — those end with @g.us)
+        const individuals = contacts.filter(jid => jid.endsWith('@s.whatsapp.net'));
+        addLog(`[Group Add Chats] ${individuals.length} individual chats to add (${contacts.length} total in DB, groups excluded).`);
+
+        for (const jid of individuals) {
+            try {
+                addLog(`[Group Add Chats] Adding: ${jid.split('@')[0]}`);
+                const response = await sock.groupParticipantsUpdate(groupJid, [jid], 'add');
+                let resStatus = response?.[0]?.status ?? response?.[jid]?.status ?? null;
+                addLog(`[Group Add Chats] Status for ${jid.split('@')[0]}: ${resStatus}`);
+                if (resStatus === '403') {
+                    await sock.sendMessage(jid, { text: `Hi! Join our group here: ${groupLink}` });
+                    addLog(`[Group Add Chats] Sent invite link to ${jid.split('@')[0]}`);
+                }
+            } catch (err) {
+                addLog(`[Group Add Chats] Direct add failed for ${jid.split('@')[0]}: ${err.message}. Sending invite message instead...`);
+                try {
+                    await sock.sendMessage(jid, { text: `Hi! Join our official WhatsApp group here: ${groupLink}` });
+                    addLog(`[Group Add Chats] Sent invite link to ${jid.split('@')[0]}`);
+                } catch (sendErr) {
+                    addLog(`[Group Add Chats] Failed to send invite message to ${jid.split('@')[0]}: ${sendErr.message}`);
+                }
+            }
+            await new Promise(r => setTimeout(r, 3000));
+        }
+        addLog('[Group Add Chats] Bulk addition completed.');
+    } catch (err) {
+        addLog(`[Group Add Chats Error] ${err.message}`);
+    }
+});
+
+app.post('/api/groups/add-unsaved-chats', async (req, res) => {
+    const { groupLink } = req.body;
+    if (!groupLink) {
+        return res.status(400).json({ success: false, message: 'Group link is required.' });
+    }
+    if (connectionStatus !== 'Connected' || !sock) {
+        return res.status(503).json({ success: false, message: 'WhatsApp bot is not connected.' });
+    }
+    const inviteCode = parseInviteCode(groupLink);
+    if (!inviteCode) {
+        return res.status(400).json({ success: false, message: 'Invalid WhatsApp group link.' });
+    }
+
+    // Respond immediately to the frontend / client so it doesn't wait/timeout
+    res.json({ success: true, message: 'Unsaved chats addition process started in background.' });
+
+    try {
+        addLog(`[Group Add Unsaved] Resolving group invite code: ${inviteCode}`);
+        let groupJid = null;
+        try {
+            const inviteInfo = await sock.groupGetInviteInfo(inviteCode);
+            groupJid = inviteInfo.id;
+            addLog(`[Group Add Unsaved] Group JID resolved: ${groupJid} (${inviteInfo.subject})`);
+        } catch (e) {
+            addLog(`[Group Add Unsaved] Failed to get invite info, trying to accept invite/join...`);
+            groupJid = await sock.groupAcceptInvite(inviteCode);
+            addLog(`[Group Add Unsaved] Group JID resolved after joining: ${groupJid}`);
+        }
+
+        if (!groupJid) {
+            addLog(`[Group Add Unsaved] Error: Could not resolve group JID for code ${inviteCode}`);
+            return;
+        }
+
+        const active = loadActiveContacts();
+        let saved = [];
+        const savedContactsFile = path.join(__dirname, 'saved_contacts.json');
+        if (fs.existsSync(savedContactsFile)) {
+            try {
+                saved = JSON.parse(fs.readFileSync(savedContactsFile, 'utf8'));
+            } catch (e) {
+                addLog(`[Group Add Unsaved] Failed to load saved_contacts.json: ${e.message}`);
+            }
+        }
+        
+        // Filter out contacts, only keep raw chats that are NOT saved contacts
+        const unsaved = active.filter(jid => !saved.includes(jid));
+        addLog(`[Group Add Unsaved] Found ${active.length} active chats, ${saved.length} saved contacts. Unsaved chats to process: ${unsaved.length}`);
+
+        for (const jid of unsaved) {
+            try {
+                addLog(`[Group Add Unsaved] Adding participant: ${jid.split('@')[0]}`);
+                const response = await sock.groupParticipantsUpdate(groupJid, [jid], "add");
+                
+                let resStatus = null;
+                if (response && response[0]) {
+                    resStatus = response[0].status;
+                } else if (response && response[jid]) {
+                    resStatus = response[jid].status;
+                }
+
+                addLog(`[Group Add Unsaved] Response status for ${jid.split('@')[0]}: ${resStatus}`);
+
+                if (resStatus === '403') {
+                    addLog(`[Group Add Unsaved] Private invite needed for ${jid.split('@')[0]}. Sending invite message...`);
+                    await sock.sendMessage(jid, { 
+                        text: `Hi! Join our official WhatsApp group here: ${groupLink}` 
+                    });
+                }
+            } catch (err) {
+                addLog(`[Group Add Unsaved] Failed to add or invite ${jid.split('@')[0]}: ${err.message}`);
+            }
+            // Delay 3 seconds between requests to avoid WhatsApp spam filter triggering
+            await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+        addLog(`[Group Add Unsaved] Bulk unsaved addition process completed.`);
+    } catch (err) {
+        addLog(`[Group Add Unsaved Error] Process failed: ${err.message}`);
+    }
+});
+
 app.post('/api/export-session', (req, res) => {
     const authDir = AUTH_DIR;
     try {
@@ -854,6 +967,19 @@ let qrCodeBase64 = null;
 let connectionStatus = 'Disconnected'; // Disconnected, Connecting, Connected, Scanning
 let isConnecting = false;
 
+// Plain in-memory chat map — populated from Baileys events on every connection
+const chatMap = new Map(); // jid -> true
+function registerChat(id) {
+    if (id && typeof id === 'string' && !chatMap.has(id)) {
+        chatMap.set(id, true);
+        addContact(id); // also persist to active_contacts.json
+    }
+}
+function flushChatMap() {
+    chatMap.forEach((_, id) => addContact(id));
+    addLog(`[Chat Sync] Flushed ${chatMap.size} chats from in-memory map.`);
+}
+
 async function connectToWhatsApp() {
     if (isConnecting) return;
     isConnecting = true;
@@ -898,23 +1024,89 @@ async function connectToWhatsApp() {
             generateHighQualityLinkPreview: true,
         });
 
-
         sock.ev.on('creds.update', async () => {
             await saveCreds();
             // Also back up to /tmp so session survives Railway container restarts
             backupSession(authStateDir);
         });
 
+        sock.ev.on('messaging-history.set', ({ chats, contacts, messages }) => {
+            if (chats) {
+                chats.forEach(c => { registerChat(c.id); addContact(c.id); });
+                addLog(`[History Sync] Loaded ${chats.length} chats from history.`);
+            }
+            if (contacts) {
+                try {
+                    let savedJids = [];
+                    const savedContactsFile = path.join(__dirname, 'saved_contacts.json');
+                    if (fs.existsSync(savedContactsFile)) {
+                        savedJids = JSON.parse(fs.readFileSync(savedContactsFile, 'utf8'));
+                    }
+                    let updated = false;
+                    contacts.forEach(c => {
+                        if (c.id && c.id.endsWith('@s.whatsapp.net') && !savedJids.includes(c.id)) {
+                            savedJids.push(c.id);
+                            updated = true;
+                        }
+                    });
+                    if (updated) {
+                        fs.writeFileSync(savedContactsFile, JSON.stringify(savedJids, null, 2), 'utf8');
+                    }
+                    addLog(`[History Sync] Loaded ${contacts.length} contacts from history.`);
+                } catch(e) {
+                    console.error('Error handling contacts in history set:', e);
+                }
+            }
+        });
+
         // Sync chats list to maintain our active inbox contacts database
         sock.ev.on('chats.set', ({ chats }) => {
             if (chats) {
-                chats.forEach(c => addContact(c.id));
+                chats.forEach(c => { registerChat(c.id); addContact(c.id); });
+                addLog(`[Chat Sync] chats.set: ${chats.length} chats loaded.`);
             }
         });
 
         sock.ev.on('chats.upsert', (chats) => {
             if (chats) {
-                chats.forEach(c => addContact(c.id));
+                chats.forEach(c => { registerChat(c.id); addContact(c.id); });
+            }
+        });
+
+        sock.ev.on('contacts.set', ({ contacts }) => {
+            if (contacts) {
+                try {
+                    const savedJids = contacts.map(c => c.id).filter(id => id && id.endsWith('@s.whatsapp.net'));
+                    const savedContactsFile = path.join(__dirname, 'saved_contacts.json');
+                    fs.writeFileSync(savedContactsFile, JSON.stringify(savedJids, null, 2), 'utf8');
+                    addLog(`[Contact Sync] Synced ${savedJids.length} saved contacts.`);
+                } catch(e) {
+                    console.error('Error saving contacts:', e);
+                }
+            }
+        });
+
+        sock.ev.on('contacts.upsert', (contacts) => {
+            if (contacts) {
+                try {
+                    let savedJids = [];
+                    const savedContactsFile = path.join(__dirname, 'saved_contacts.json');
+                    if (fs.existsSync(savedContactsFile)) {
+                        savedJids = JSON.parse(fs.readFileSync(savedContactsFile, 'utf8'));
+                    }
+                    let updated = false;
+                    contacts.forEach(c => {
+                        if (c.id && c.id.endsWith('@s.whatsapp.net') && !savedJids.includes(c.id)) {
+                            savedJids.push(c.id);
+                            updated = true;
+                        }
+                    });
+                    if (updated) {
+                        fs.writeFileSync(savedContactsFile, JSON.stringify(savedJids, null, 2), 'utf8');
+                    }
+                } catch(e) {
+                    console.error('Error updating contacts:', e);
+                }
             }
         });
 
@@ -977,7 +1169,15 @@ async function connectToWhatsApp() {
 
                 io.emit('status', { status: connectionStatus });
                 io.emit('qr', { qr: null });
-                addLog('WhatsApp Connection established successfully!');
+
+                // Flush in-memory chat map into active_contacts.json on every connect
+                setTimeout(() => {
+                    try {
+                        flushChatMap();
+                    } catch(e) {
+                        addLog(`[Chat Sync] Store flush failed: ${e.message}`);
+                    }
+                }, 5000); // 5s delay to let WhatsApp finish sending initial sync payloads
             } else if (connection === 'connecting') {
                 connectionStatus = 'Connecting';
                 io.emit('status', { status: connectionStatus });
@@ -1125,40 +1325,9 @@ async function connectToWhatsApp() {
                                 const typingDuration = Math.min(1500 + replyText.length * 15, 6000);
                                 await delay(typingDuration);
 
-                                const urlRegex = /https?:\/\/[^\s]+/gi;
-                                const urls = replyText.match(urlRegex);
-                                let linkPreview = undefined;
-                                
-                                if (urls && urls.length > 0) {
-                                    // Give time for the link to load as requested by the user
-                                    addLog(`Link detected in auto-reply. Delaying for 3 seconds to let the link load...`);
-                                    await delay(3000);
-                                    
-                                    try {
-                                        linkPreview = await getUrlInfo(replyText, {
-                                            uploadImage: sock.waUploadToServer
-                                        });
-                                    } catch (urlErr) {
-                                        addLog(`Failed to generate auto-reply link preview: ${urlErr.message}`);
-                                        // Fallback
-                                        try {
-                                            const previewData = await getLinkPreview(urls[0]);
-                                            linkPreview = {
-                                                'canonical-url': previewData.url || urls[0],
-                                                'matched-text': urls[0],
-                                                title: previewData.title || '',
-                                                description: previewData.description || '',
-                                            };
-                                        } catch (fallbackErr) {}
-                                    }
-                                }
-
-                                
-                                const msgContent = { text: replyText };
-                                if (linkPreview) {
-                                    msgContent.linkPreview = linkPreview;
-                                }
-                                await sock.sendMessage(senderJid, msgContent);
+                                // Baileys v7 auto-generates link previews via generateWAMessageContent
+                                // when sendMessage is called with { text } — no manual linkPreview needed
+                                await sock.sendMessage(senderJid, { text: replyText });
                                 addLog(`Auto-reply sent text to ${senderName}.`);
                                 
                                 await setPresence('paused');

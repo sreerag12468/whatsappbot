@@ -27,7 +27,7 @@ app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix='/fb')
 
 VERIFY_TOKEN      = os.getenv("VERIFY_TOKEN", "myverifytoken")
 PAGE_ID           = os.getenv("PAGE_ID", "657207910809297")
-PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN", "EAAOEye5xXB4BR6ch9TYwzTXjHzZBm0B2hEIEcOiaKKkwApIAxriXPcL6JWRZBZCY4btAOJfrlpFZCvsZBqyZBGZAAFZCohutvzKfK56zZAnQLguXHrUvCbMhZCRZA5j0ZCpu9WeNVP2ZABN3rW4bWYPbl8V6iTSvcxt5pV7pdc1ZBjZAiuquoLd2Wt2oZAeeKRx8tZAAVyWk51ZCkDwshH")
+PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN", "EAAOEye5xXB4BRzSDMWJmZAgboYbCzGzZB54DJNHeARJKt6ZBBu71QUpWVdf4HxP2HtIkPEs84drnDkbrEzwk3Cxej2GDu4YuAAVaikAQX1cZCc2ShMonlB6esxrbySWZCnlV05hM38Kp9MOa2GjuQkVkZAwi0pflCy5UuC3WyJyiWWurkDgvTDMCo1XbywSVGi1gZDZD")
 IG_USER_ID        = os.getenv("IG_USER_ID", "17841451641925459")
 GRAPH_API_VERSION = os.getenv("GRAPH_API_VERSION", "v19.0")
 GRAPH_URL         = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
@@ -166,7 +166,7 @@ def fetch_page_posts(force=False):
         return _posts_cache
     print("[Cache] Fetching fresh posts from Facebook...")
     
-    tokens_to_try = [PAGE_ACCESS_TOKEN, "EAAOEye5xXB4BR6ch9TYwzTXjHzZBm0B2hEIEcOiaKKkwApIAxriXPcL6JWRZBZCY4btAOJfrlpFZCvsZBqyZBGZAAFZCohutvzKfK56zZAnQLguXHrUvCbMhZCRZA5j0ZCpu9WeNVP2ZABN3rW4bWYPbl8V6iTSvcxt5pV7pdc1ZBjZAiuquoLd2Wt2oZAeeKRx8tZAAVyWk51ZCkDwshH", "EAAOEye5xXB4BRzz8MnN62XaqxROB40ES6qPY1PY0Vpf5jpZAjsCAu0ZCOs9cNQqRgZAp9NrKJp8bMtIOhe3bWPovQJFlwcYkDuLytihtDXKeqHQvoJQERMKQ5xPZCepNLve3G6jU1Dyb4rtZAPKv2MeqB2IqsEolCGe4tu9nYdC7ZB0nMLoOKZBvazjZCzDmS8ZBm6kIbE9ZBY"]
+    tokens_to_try = [PAGE_ACCESS_TOKEN, "EAAOEye5xXB4BRzSDMWJmZAgboYbCzGzZB54DJNHeARJKt6ZBBu71QUpWVdf4HxP2HtIkPEs84drnDkbrEzwk3Cxej2GDu4YuAAVaikAQX1cZCc2ShMonlB6esxrbySWZCnlV05hM38Kp9MOa2GjuQkVkZAwi0pflCy5UuC3WyJyiWWurkDgvTDMCo1XbywSVGi1gZDZD", "EAAOEye5xXB4BRzz8MnN62XaqxROB40ES6qPY1PY0Vpf5jpZAjsCAu0ZCOs9cNQqRgZAp9NrKJp8bMtIOhe3bWPovQJFlwcYkDuLytihtDXKeqHQvoJQERMKQ5xPZCepNLve3G6jU1Dyb4rtZAPKv2MeqB2IqsEolCGe4tu9nYdC7ZB0nMLoOKZBvazjZCzDmS8ZBm6kIbE9ZBY"]
     tokens_to_try = list(dict.fromkeys(t for t in tokens_to_try if t))
     
     last_error = None
@@ -528,7 +528,7 @@ def fetch_ig_media(force=False):
     if not IG_USER_ID:
         raise Exception("IG_USER_ID is not configured")
         
-    tokens_to_try = [PAGE_ACCESS_TOKEN, "EAAOEye5xXB4BR6ch9TYwzTXjHzZBm0B2hEIEcOiaKKkwApIAxriXPcL6JWRZBZCY4btAOJfrlpFZCvsZBqyZBGZAAFZCohutvzKfK56zZAnQLguXHrUvCbMhZCRZA5j0ZCpu9WeNVP2ZABN3rW4bWYPbl8V6iTSvcxt5pV7pdc1ZBjZAiuquoLd2Wt2oZAeeKRx8tZAAVyWk51ZCkDwshH", "EAAOEye5xXB4BRzz8MnN62XaqxROB40ES6qPY1PY0Vpf5jpZAjsCAu0ZCOs9cNQqRgZAp9NrKJp8bMtIOhe3bWPovQJFlwcYkDuLytihtDXKeqHQvoJQERMKQ5xPZCepNLve3G6jU1Dyb4rtZAPKv2MeqB2IqsEolCGe4tu9nYdC7ZB0nMLoOKZBvazjZCzDmS8ZBm6kIbE9ZBY"]
+    tokens_to_try = [PAGE_ACCESS_TOKEN, "EAAOEye5xXB4BRzSDMWJmZAgboYbCzGzZB54DJNHeARJKt6ZBBu71QUpWVdf4HxP2HtIkPEs84drnDkbrEzwk3Cxej2GDu4YuAAVaikAQX1cZCc2ShMonlB6esxrbySWZCnlV05hM38Kp9MOa2GjuQkVkZAwi0pflCy5UuC3WyJyiWWurkDgvTDMCo1XbywSVGi1gZDZD", "EAAOEye5xXB4BRzz8MnN62XaqxROB40ES6qPY1PY0Vpf5jpZAjsCAu0ZCOs9cNQqRgZAp9NrKJp8bMtIOhe3bWPovQJFlwcYkDuLytihtDXKeqHQvoJQERMKQ5xPZCepNLve3G6jU1Dyb4rtZAPKv2MeqB2IqsEolCGe4tu9nYdC7ZB0nMLoOKZBvazjZCzDmS8ZBm6kIbE9ZBY"]
     tokens_to_try = list(dict.fromkeys(t for t in tokens_to_try if t))
     
     last_error = None
@@ -2186,7 +2186,7 @@ def initialize_token():
 
     print("[Token Initialization] Token is invalid. Finding working fallback token...")
     fallbacks = [
-        "EAAOEye5xXB4BR6ch9TYwzTXjHzZBm0B2hEIEcOiaKKkwApIAxriXPcL6JWRZBZCY4btAOJfrlpFZCvsZBqyZBGZAAFZCohutvzKfK56zZAnQLguXHrUvCbMhZCRZA5j0ZCpu9WeNVP2ZABN3rW4bWYPbl8V6iTSvcxt5pV7pdc1ZBjZAiuquoLd2Wt2oZAeeKRx8tZAAVyWk51ZCkDwshH",
+        "EAAOEye5xXB4BRzSDMWJmZAgboYbCzGzZB54DJNHeARJKt6ZBBu71QUpWVdf4HxP2HtIkPEs84drnDkbrEzwk3Cxej2GDu4YuAAVaikAQX1cZCc2ShMonlB6esxrbySWZCnlV05hM38Kp9MOa2GjuQkVkZAwi0pflCy5UuC3WyJyiWWurkDgvTDMCo1XbywSVGi1gZDZD",
         "EAAOEye5xXB4BRzz8MnN62XaqxROB40ES6qPY1PY0Vpf5jpZAjsCAu0ZCOs9cNQqRgZAp9NrKJp8bMtIOhe3bWPovQJFlwcYkDuLytihtDXKeqHQvoJQERMKQ5xPZCepNLve3G6jU1Dyb4rtZAPKv2MeqB2IqsEolCGe4tu9nYdC7ZB0nMLoOKZBvazjZCzDmS8ZBm6kIbE9ZBY"
     ]
     for fb in fallbacks:
