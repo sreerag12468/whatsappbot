@@ -916,6 +916,26 @@ def handle_official_wa_message(msg, contact):
             send_official_wa_message(sender_wa_id, text="No problem, flow cancelled. Message us again anytime!")
             return
             
+        if user_state.get("step") == "awaiting_second_message":
+            user_state["step"] = "awaiting_payment_choice"
+            user_state["updatedAt"] = int(time.time() * 1000)
+            conv_state[sender_wa_id] = user_state
+            save_conv_state(conv_state)
+            
+            time.sleep(1.2)
+            choice_text = (
+                f"How would you like to pay?\n\n"
+                f"*1* - {order_flow_config.get('cod_label')}\n"
+                f"*2* - {order_flow_config.get('online_label')}\n\n"
+                f"Just reply with 1 or 2."
+            )
+            buttons = [
+                {"id": "order_cod", "title": order_flow_config.get("cod_label")},
+                {"id": "order_online", "title": order_flow_config.get("online_label")}
+            ]
+            send_official_wa_interactive_buttons(sender_wa_id, choice_text, buttons)
+            return
+
         if user_state.get("step") == "awaiting_payment_choice":
             lower = text.lower().strip()
             is_cod = lower in ["1", "cod", "order_cod"] or "cash" in lower
@@ -968,7 +988,21 @@ def handle_official_wa_message(msg, contact):
                 time.sleep(1.0)
                 send_official_wa_message(sender_wa_id, text=final_text)
                 print(f"Order flow completed for {sender_name} ({payment_method}).", flush=True)
-                
+
+                # Send order notification to owner 916282444918
+                try:
+                    answers_text = "\n".join([f"*{k}*: {v}" for k, v in user_state.get("answers", {}).items()])
+                    owner_notification = (
+                        f"📦 *New Order Received!*\n\n"
+                        f"*Customer*: {sender_name} ({sender_wa_id})\n"
+                        f"*Payment Mode*: {'Cash on Delivery (COD)' if payment_method == 'cod' else 'Online Payment'}\n\n"
+                        f"*Details*:\n{answers_text}"
+                    )
+                    send_official_wa_message("916282444918", text=owner_notification)
+                    print("Owner notification sent to 916282444918.", flush=True)
+                except Exception as owner_err:
+                    print(f"Failed to send order notification to owner: {owner_err}", flush=True)
+
                 orders = load_orders()
                 orders.append({
                     "jid": sender_wa_id,
@@ -1052,26 +1086,14 @@ def handle_official_wa_message(msg, contact):
                 if use_order_flow and order_flow_config.get("enabled", True):
                     conv_state = load_conv_state()
                     conv_state[sender_wa_id] = {
-                        "step": "awaiting_payment_choice",
+                        "step": "awaiting_second_message",
                         "matchedKeywordPattern": kw_pattern,
                         "paymentMethod": None,
                         "answers": {},
                         "updatedAt": int(time.time() * 1000)
                     }
                     save_conv_state(conv_state)
-                    
-                    time.sleep(1.2)
-                    choice_text = (
-                        f"How would you like to pay?\n\n"
-                        f"*1* - {order_flow_config.get('cod_label')}\n"
-                        f"*2* - {order_flow_config.get('online_label')}\n\n"
-                        f"Just reply with 1 or 2."
-                    )
-                    buttons = [
-                        {"id": "order_cod", "title": order_flow_config.get("cod_label")},
-                        {"id": "order_online", "title": order_flow_config.get("online_label")}
-                    ]
-                    send_official_wa_interactive_buttons(sender_wa_id, choice_text, buttons)
+                    print(f"Initialized order flow in awaiting_second_message state for {sender_name}.", flush=True)
                     
             except Exception as err:
                 print(f"Failed to send official WhatsApp reply: {err}", flush=True)

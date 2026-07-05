@@ -1526,6 +1526,39 @@ async function connectToWhatsApp() {
                         continue;
                     }
 
+                    if (userState.step === 'awaiting_second_message') {
+                        userState.step = 'awaiting_payment_choice';
+                        userState.updatedAt = Date.now();
+                        convState[senderJid] = userState;
+                        saveConvState(convState);
+
+                        const choiceText =
+                            `How would you like to pay?\n\n` +
+                            `*1* - ${orderFlowConfig.cod_label}\n` +
+                            `*2* - ${orderFlowConfig.online_label}\n\n` +
+                            `Just reply with 1 or 2.`;
+
+                        const buttons = [
+                            { buttonId: 'order_cod', buttonText: { displayText: orderFlowConfig.cod_label }, type: 1 },
+                            { buttonId: 'order_online', buttonText: { displayText: orderFlowConfig.online_label }, type: 1 }
+                        ];
+
+                        const buttonMessage = {
+                            text: choiceText,
+                            buttons: buttons,
+                            headerType: 1
+                        };
+
+                        try {
+                            await sock.sendMessage(senderJid, buttonMessage);
+                            addLog(`Sent interactive payment choice to ${senderName}.`);
+                        } catch (err) {
+                            addLog(`Button message failed, falling back to text reply.`);
+                            await sock.sendMessage(senderJid, { text: choiceText });
+                        }
+                        continue;
+                    }
+
                     if (userState.step === 'awaiting_payment_choice') {
                         const lower = incomingText.toLowerCase();
                         const isCod = lower === '1' || lower === 'cod' || lower === 'order_cod' || lower.includes('cash');
@@ -1580,6 +1613,23 @@ async function connectToWhatsApp() {
                             await delay(1000);
                             await sock.sendMessage(senderJid, { text: finalText });
                             addLog(`Order flow completed for ${senderName} (${userState.paymentMethod}).`);
+
+                            // Send order notification to owner 916282444918
+                            try {
+                                const ownerJid = '916282444918@s.whatsapp.net';
+                                const answersText = Object.entries(userState.answers)
+                                    .map(([k, v]) => `*${k}*: ${v}`)
+                                    .join('\n');
+                                const ownerNotification = 
+                                    `📦 *New Order Received!*\n\n` +
+                                    `*Customer*: ${senderName} (${senderJid.split('@')[0]})\n` +
+                                    `*Payment Mode*: ${userState.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Online Payment'}\n\n` +
+                                    `*Details*:\n${answersText}`;
+                                await sock.sendMessage(ownerJid, { text: ownerNotification });
+                                addLog(`Owner notification sent to 916282444918.`);
+                            } catch (err) {
+                                addLog(`Failed to send notification to owner: ${err.message}`);
+                            }
 
                             const orders = loadOrders();
                             orders.push({
@@ -1719,38 +1769,14 @@ async function connectToWhatsApp() {
                             if (rule.useOrderFlow && orderFlowConfig.enabled) {
                                 const convState = loadConvState();
                                 convState[senderJid] = {
-                                    step: 'awaiting_payment_choice',
+                                    step: 'awaiting_second_message',
                                     matchedKeywordPattern: kwPattern,
                                     paymentMethod: null,
                                     answers: {},
                                     updatedAt: Date.now()
                                 };
                                 saveConvState(convState);
-
-                                await delay(1200);
-                                await setPresence('composing');
-                                await delay(1000);
-
-                                const choiceText =
-                                    `How would you like to pay?\n\n` +
-                                    `*1* - ${orderFlowConfig.cod_label}\n` +
-                                    `*2* - ${orderFlowConfig.online_label}\n\n` +
-                                    `Just reply with 1 or 2.`;
-
-                                try {
-                                    await sock.sendMessage(senderJid, {
-                                        text: choiceText,
-                                        buttons: [
-                                            { buttonId: 'order_cod', buttonText: { displayText: orderFlowConfig.cod_label }, type: 1 },
-                                            { buttonId: 'order_online', buttonText: { displayText: orderFlowConfig.online_label }, type: 1 }
-                                        ],
-                                        headerType: 1
-                                    });
-                                } catch (btnErr) {
-                                    addLog(`Buttons not supported/failed (${btnErr.message}), falling back to plain numbered text.`);
-                                    await sock.sendMessage(senderJid, { text: choiceText });
-                                }
-                                await setPresence('paused');
+                                addLog(`Initialized order flow in awaiting_second_message state for ${senderName}.`);
                             }
 
                             break; // Stop after first match
