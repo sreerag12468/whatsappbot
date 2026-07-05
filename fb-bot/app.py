@@ -632,7 +632,7 @@ def transcode_to_ogg_opus(base64_data):
     out_path = in_path.replace(".webm", ".ogg")
     
     try:
-        cmd = ["ffmpeg", "-y", "-i", in_path, "-c:a", "libopus", "-b:a", "16k", "-ac", "1", "-ar", "16000", out_path]
+        cmd = ["ffmpeg", "-y", "-i", in_path, "-vn", "-c:a", "libopus", "-b:a", "16k", "-ac", "1", "-ar", "16000", "-avoid_negative_ts", "make_zero", "-f", "ogg", out_path]
         subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         with open(out_path, "rb") as outfile:
             transcoded_bytes = outfile.read()
