@@ -5,6 +5,8 @@ import os
 import json
 import re
 import base64
+import hmac
+import hashlib
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -27,12 +29,22 @@ class PrefixMiddleware(object):
 app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix='/fb')
 
 
-VERIFY_TOKEN      = os.getenv("VERIFY_TOKEN", "myverifytoken")
+# Instagram & FB credentials mapping
+IG_ACCESS_TOKEN        = os.getenv("IG_ACCESS_TOKEN") or os.getenv("PAGE_ACCESS_TOKEN", "EAAOEye5xXB4BR9A8DuLQt4K2MqxaI37G0dqxxes8RTyXS5NwvXo9x97gjXHFwtR0u35HqDXXfooue4mZBcyCyToPnthEtAzTjmOKTZBZAeGLw5XZBDGfsPsAPYfYaZBGZCgbgRPs88ajq9qDUbOWmwJpSkphZClZAXuF6cj0KoB7NkD0xNEEpiqCEZCoBiiSBts3PMgZDZD")
+IG_BUSINESS_ACCOUNT_ID = os.getenv("IG_BUSINESS_ACCOUNT_ID") or os.getenv("IG_USER_ID", "17841451641925459")
+IG_APP_ID              = os.getenv("IG_APP_ID") or os.getenv("APP_ID")
+IG_APP_SECRET          = os.getenv("IG_APP_SECRET") or os.getenv("APP_SECRET")
+WEBHOOK_VERIFY_TOKEN   = os.getenv("WEBHOOK_VERIFY_TOKEN") or os.getenv("VERIFY_TOKEN", "myverifytoken")
+
+# Map back to existing script variable names
+PAGE_ACCESS_TOKEN      = IG_ACCESS_TOKEN
+IG_USER_ID             = IG_BUSINESS_ACCOUNT_ID
+VERIFY_TOKEN           = WEBHOOK_VERIFY_TOKEN
+
 PAGE_ID           = os.getenv("PAGE_ID", "657207910809297")
-PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN", "EAAOEye5xXB4BR9A8DuLQt4K2MqxaI37G0dqxxes8RTyXS5NwvXo9x97gjXHFwtR0u35HqDXXfooue4mZBcyCyToPnthEtAzTjmOKTZBZAeGLw5XZBDGfsPsAPYfYaZBGZCgbgRPs88ajq9qDUbOWmwJpSkphZClZAXuF6cj0KoB7NkD0xNEEpiqCEZCoBiiSBts3PMgZDZD")
-IG_USER_ID        = os.getenv("IG_USER_ID", "17841451641925459")
 GRAPH_API_VERSION = os.getenv("GRAPH_API_VERSION", "v19.0")
 GRAPH_URL         = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
+
 
 BASE_DIR          = os.path.dirname(os.path.abspath(__file__))
 KEYWORDS_FILE     = os.path.join(BASE_DIR, "keywords.json")
@@ -127,6 +139,13 @@ IG_REPLIED_FILE     = os.path.join(BASE_DIR, "ig_replied.json")
 IG_STATS_FILE       = os.path.join(BASE_DIR, "ig_stats.json")
 IG_WELCOMED_FILE    = os.path.join(BASE_DIR, "ig_welcomed.json")
 IG_SETTINGS_FILE    = os.path.join(BASE_DIR, "ig_settings.json")
+IG_MESSAGES_LOG_FILE    = os.path.join(BASE_DIR, "ig_messages_log.json")
+IG_MESSAGES_QUEUE_FILE  = os.path.join(BASE_DIR, "ig_messages_queue.json")
+IG_LEADS_FILE           = os.path.join(BASE_DIR, "ig_leads.json")
+IG_LINK_PAGES_FILE      = os.path.join(BASE_DIR, "ig_link_pages.json")
+IG_SCHEDULED_POSTS_FILE = os.path.join(BASE_DIR, "ig_scheduled_posts.json")
+IG_FLOWS_FILE           = os.path.join(BASE_DIR, "ig_flows.json")
+
 
 # ── Post cache (avoids hitting Facebook API on every UI load) ─────────────────
 _posts_cache      = []
@@ -557,6 +576,157 @@ def save_ig_settings(data):
         json.dump(data, f, indent=2)
 
 
+# ── New Instagram Database load/save helpers ──
+def load_ig_messages_log():
+    if os.path.exists(IG_MESSAGES_LOG_FILE):
+        try:
+            with open(IG_MESSAGES_LOG_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_ig_messages_log(data):
+    try:
+        with open(IG_MESSAGES_LOG_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error saving IG message logs: {e}")
+
+def load_ig_messages_queue():
+    if os.path.exists(IG_MESSAGES_QUEUE_FILE):
+        try:
+            with open(IG_MESSAGES_QUEUE_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_ig_messages_queue(data):
+    try:
+        with open(IG_MESSAGES_QUEUE_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error saving IG message queue: {e}")
+
+def load_ig_leads():
+    if os.path.exists(IG_LEADS_FILE):
+        try:
+            with open(IG_LEADS_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_ig_leads(data):
+    try:
+        with open(IG_LEADS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error saving IG leads: {e}")
+
+def load_ig_link_pages():
+    if os.path.exists(IG_LINK_PAGES_FILE):
+        try:
+            with open(IG_LINK_PAGES_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_ig_link_pages(data):
+    try:
+        with open(IG_LINK_PAGES_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error saving IG link pages: {e}")
+
+def load_ig_scheduled_posts():
+    if os.path.exists(IG_SCHEDULED_POSTS_FILE):
+        try:
+            with open(IG_SCHEDULED_POSTS_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_ig_scheduled_posts(data):
+    try:
+        with open(IG_SCHEDULED_POSTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error saving IG scheduled posts: {e}")
+
+def load_ig_flows():
+    if os.path.exists(IG_FLOWS_FILE):
+        try:
+            with open(IG_FLOWS_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_ig_flows(data):
+    try:
+        with open(IG_FLOWS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error saving IG flows: {e}")
+
+
+
+IG_CONV_STATE_FILE = os.path.join(BASE_DIR, "ig_conv_state.json")
+
+def load_ig_conv_state():
+    if os.path.exists(IG_CONV_STATE_FILE):
+        try:
+            with open(IG_CONV_STATE_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_ig_conv_state(data):
+    try:
+        with open(IG_CONV_STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error saving IG conversation state: {e}")
+
+def is_positive_reply(text):
+    return text.lower().strip() in ("yes", "y", "yep", "yeah", "sure", "ok", "okay", "agree", "1")
+
+def is_negative_reply(text):
+    return text.lower().strip() in ("no", "n", "nope", "nah", "cancel", "stop", "2")
+
+def is_valid_email(text):
+    return bool(re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", text.strip()))
+
+def capture_ig_lead(user_id, username, email=None, phone=None, automation_name=None):
+    leads = load_ig_leads()
+    new_lead = {
+        "user_id": str(user_id),
+        "username": username or "",
+        "email": email or "",
+        "phone": phone or "",
+        "automation_name": automation_name or "",
+        "captured_at": time.time()
+    }
+    leads.append(new_lead)
+    save_ig_leads(leads)
+    print(f"[Lead Captured] {new_lead}", flush=True)
+    
+    # Sync with external CRM Webhook if configured
+    settings = load_ig_settings()
+    crm_webhook = settings.get("crm_webhook_url")
+    if crm_webhook:
+        try:
+            requests.post(crm_webhook, json=new_lead, timeout=5)
+            print(f"[CRM Sync] Lead successfully pushed to CRM: {crm_webhook}", flush=True)
+        except Exception as e:
+            print(f"[CRM Sync Error] Failed to push to CRM: {e}", flush=True)
+
+
 # ── Daily DM cap enforcement ───────────────────────────────────────────────
 def daily_cap_ok() -> bool:
     """Return True if today's DM count is below the configured cap."""
@@ -689,11 +859,6 @@ def build_ig_dm_body(auto, username=""):
         parts.append(dm)
     if auto.get("link_url"):
         parts.append(auto["link_url"])
-    if auto.get("email_capture") and auto.get("email_prompt"):
-        parts.append(auto["email_prompt"])
-    follow_up = personalize_ig_message(auto.get("follow_up_message", ""), username)
-    if follow_up:
-        parts.append(follow_up)
     return "\n\n".join(p for p in parts if p)
 
 
@@ -1114,46 +1279,292 @@ def reply_to_ig_comment(comment_id, message):
         print(f"  [IG Comment Reply failed] ❌ → {result}")
 
 
-def send_ig_private_reply(comment_id, message):
+IG_USER_INTERACTIONS_FILE = os.path.join(BASE_DIR, "ig_user_interactions.json")
+
+def load_ig_user_interactions():
+    if os.path.exists(IG_USER_INTERACTIONS_FILE):
+        try:
+            with open(IG_USER_INTERACTIONS_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_ig_user_interactions(data):
+    try:
+        with open(IG_USER_INTERACTIONS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error saving user interactions: {e}")
+
+def record_user_interaction(user_id):
+    if not user_id:
+        return
+    interactions = load_ig_user_interactions()
+    interactions[str(user_id)] = time.time()
+    save_ig_user_interactions(interactions)
+
+def get_last_user_interaction_time(user_id):
+    interactions = load_ig_user_interactions()
+    return interactions.get(str(user_id))
+
+def queue_ig_message(recipient_id, text, comment_id=None, is_private_reply=False, automation_name=None, delay=0):
+    queue = load_ig_messages_queue()
+    queue.append({
+        "recipient_id": recipient_id,
+        "text": text,
+        "comment_id": comment_id,
+        "is_private_reply": is_private_reply,
+        "automation_name": automation_name or "manual",
+        "queued_at": time.time(),
+        "delay": delay
+    })
+    save_ig_messages_queue(queue)
+    print(f"[Queue] Queued message to {recipient_id}: {text[:30]}...", flush=True)
+
+def perform_ig_private_reply_send(comment_id, message) -> tuple[bool, str]:
     if not IG_USER_ID:
-        print("  [IG AutoDM failed ❌] IG_USER_ID not set")
-        return
+        return False, "IG_USER_ID not set"
     if not daily_cap_ok():
-        print("  [IG AutoDM skipped ⚠️] Daily DM cap reached")
-        return
-    resp = requests.post(
-        f"{GRAPH_URL}/{IG_USER_ID}/messages",
-        params={"access_token": PAGE_ACCESS_TOKEN},
-        json={"recipient": {"comment_id": comment_id}, "message": {"text": message}},
-        timeout=8,
+        return False, "Daily DM cap reached"
+    try:
+        resp = requests.post(
+            f"{GRAPH_URL}/{IG_USER_ID}/messages",
+            params={"access_token": PAGE_ACCESS_TOKEN},
+            json={"recipient": {"comment_id": comment_id}, "message": {"text": message}},
+            timeout=8,
+        )
+        result = resp.json()
+        if "message_id" in result:
+            bump_ig_stat("dms_sent")
+            bump_daily_dm()
+            return True, ""
+        else:
+            return False, result.get("error", {}).get("message", str(result))
+    except Exception as e:
+        return False, str(e)
+
+def perform_ig_dm_send(user_id, message) -> tuple[bool, str]:
+    if not IG_USER_ID:
+        return False, "IG_USER_ID not set"
+    if not daily_cap_ok():
+        return False, "Daily DM cap reached"
+    try:
+        resp = requests.post(
+            f"{GRAPH_URL}/{IG_USER_ID}/messages",
+            params={"access_token": PAGE_ACCESS_TOKEN},
+            json={"recipient": {"id": user_id}, "message": {"text": message}},
+            timeout=8,
+        )
+        result = resp.json()
+        if "message_id" in result:
+            bump_ig_stat("dms_sent")
+            bump_daily_dm()
+            return True, ""
+        else:
+            return False, result.get("error", {}).get("message", str(result))
+    except Exception as e:
+        return False, str(e)
+
+def send_ig_private_reply(comment_id, message, recipient_id=None, automation_name=None, delay=0):
+    queue_ig_message(
+        recipient_id=recipient_id,
+        text=message,
+        comment_id=comment_id,
+        is_private_reply=True,
+        automation_name=automation_name,
+        delay=delay
     )
-    result = resp.json()
-    if "message_id" in result:
-        print(f"  [IG AutoDM sent] ✅")
-        bump_ig_stat("dms_sent")
-        bump_daily_dm()
-    else:
-        print(f"  [IG AutoDM failed] ❌ → {result}")
+
+def send_ig_dm(user_id, message, automation_name=None, delay=0):
+    queue_ig_message(
+        recipient_id=user_id,
+        text=message,
+        comment_id=None,
+        is_private_reply=False,
+        automation_name=automation_name,
+        delay=delay
+    )
+
+import random
+def ig_queue_worker():
+    print("[IG Worker] Started Instagram queue worker thread.", flush=True)
+    while True:
+        try:
+            queue = load_ig_messages_queue()
+            if not queue:
+                time.sleep(3)
+                continue
+                
+            # Count successful DMs sent in the last 1 hour
+            logs = load_ig_messages_log()
+            one_hour_ago = time.time() - 3600
+            sent_in_last_hour = sum(1 for log in logs if log.get("sent_at", 0) >= one_hour_ago and log.get("status") == "success")
+            
+            if sent_in_last_hour >= 200:
+                print(f"[IG Worker] Rolling hourly rate limit reached ({sent_in_last_hour}/200). Waiting 30s...", flush=True)
+                time.sleep(30)
+                continue
+                
+            # Process the first task
+            msg_task = queue[0]
+            recipient_id = msg_task.get("recipient_id")
+            is_private_reply = msg_task.get("is_private_reply", False)
+            automation_name = msg_task.get("automation_name", "manual")
+            
+            # Rule 2: One private reply per comment, within 7 days.
+            # (Enforced during queue processing or during queuing, we will double check comment timestamp)
+            comment_id = msg_task.get("comment_id")
+            
+            # Rule 3: One automated DM per user per 24-hour period from a comment or story trigger
+            if automation_name != "manual" and recipient_id:
+                twenty_four_hours_ago = time.time() - 86400
+                already_sent_24h = any(
+                    log.get("recipient_id") == recipient_id and 
+                    log.get("sent_at", 0) >= twenty_four_hours_ago and 
+                    log.get("status") == "success" and
+                    log.get("is_automated", True)
+                    for log in logs
+                )
+                if already_sent_24h:
+                    print(f"[IG Worker] 🚫 24h automated DM rule check failed for user {recipient_id}. Skipping.", flush=True)
+                    queue.pop(0)
+                    save_ig_messages_queue(queue)
+                    logs.append({
+                        "recipient_id": recipient_id,
+                        "text": msg_task.get("text"),
+                        "status": "skipped_24h_limit",
+                        "sent_at": time.time(),
+                        "is_automated": True
+                    })
+                    save_ig_messages_log(logs)
+                    continue
+
+            # Rule 4: 24-hour standard messaging window:
+            # For regular (non-private-reply) DMs, only allow free-form/promotional sends if the user messaged, commented, or story-replied within the last 24 hours.
+            if not is_private_reply and recipient_id:
+                last_interaction_time = get_last_user_interaction_time(recipient_id)
+                if last_interaction_time is None or (time.time() - last_interaction_time > 86400):
+                    print(f"[IG Worker] 🚫 User {recipient_id} outside 24h messaging window. Skipping.", flush=True)
+                    queue.pop(0)
+                    save_ig_messages_queue(queue)
+                    logs.append({
+                        "recipient_id": recipient_id,
+                        "text": msg_task.get("text"),
+                        "status": "outside_messaging_window",
+                        "sent_at": time.time(),
+                        "is_automated": automation_name != "manual"
+                    })
+                    save_ig_messages_log(logs)
+                    continue
+
+            # Human-like delay: 1-4 seconds
+            rand_delay = random.uniform(1.0, 4.0)
+            task_delay = float(msg_task.get("delay") or 0)
+            total_delay = rand_delay + task_delay
+            
+            print(f"[IG Worker] Waiting {total_delay:.1f}s before sending...", flush=True)
+            time.sleep(total_delay)
+            
+            text = msg_task.get("text")
+            success = False
+            error_message = ""
+            
+            if is_private_reply and comment_id:
+                success, error_message = perform_ig_private_reply_send(comment_id, text)
+            else:
+                success, error_message = perform_ig_dm_send(recipient_id, text)
+                
+            logs.append({
+                "recipient_id": recipient_id,
+                "text": text,
+                "status": "success" if success else f"failed: {error_message}",
+                "sent_at": time.time(),
+                "is_automated": automation_name != "manual",
+                "is_private_reply": is_private_reply
+            })
+            save_ig_messages_log(logs)
+            
+            queue.pop(0)
+            save_ig_messages_queue(queue)
+            
+        except Exception as e:
+            print(f"[IG Worker] Exception in loop: {e}", flush=True)
+            time.sleep(5)
 
 
-def send_ig_dm(user_id, message):
+def publish_ig_media(media_url, caption):
     if not IG_USER_ID:
-        return
-    if not daily_cap_ok():
-        print("  [IG DM skipped ⚠️] Daily DM cap reached")
-        return
-    resp = requests.post(
-        f"{GRAPH_URL}/{IG_USER_ID}/messages",
-        params={"access_token": PAGE_ACCESS_TOKEN},
-        json={"recipient": {"id": user_id}, "message": {"text": message}},
-        timeout=8,
-    )
-    result = resp.json()
-    if "message_id" in result:
-        bump_ig_stat("dms_sent")
-        bump_daily_dm()
-    else:
-        print(f"  [IG DM failed] ❌ → {result}")
+        return False, "IG_USER_ID not configured"
+    try:
+        is_video = any(ext in media_url.lower() for ext in (".mp4", ".mov", ".avi", ".m4v"))
+        payload = {
+            "caption": caption,
+            "access_token": PAGE_ACCESS_TOKEN
+        }
+        if is_video:
+            payload["video_url"] = media_url
+            payload["media_type"] = "VIDEO"
+        else:
+            payload["image_url"] = media_url
+            
+        resp = requests.post(
+            f"{GRAPH_URL}/{IG_USER_ID}/media",
+            json=payload,
+            timeout=15
+        )
+        res1 = resp.json()
+        creation_id = res1.get("id")
+        if not creation_id:
+            return False, f"Failed container creation: {res1.get('error', {}).get('message', str(res1))}"
+            
+        resp_pub = requests.post(
+            f"{GRAPH_URL}/{IG_USER_ID}/media_publish",
+            json={
+                "creation_id": creation_id,
+                "access_token": PAGE_ACCESS_TOKEN
+            },
+            timeout=15
+        )
+        res2 = resp_pub.json()
+        media_id = res2.get("id")
+        if not media_id:
+            return False, f"Failed publish: {res2.get('error', {}).get('message', str(res2))}"
+        return True, media_id
+    except Exception as e:
+        return False, str(e)
+
+def ig_scheduler_worker():
+    print("[IG Scheduler] Started content scheduler thread.", flush=True)
+    while True:
+        try:
+            posts = load_ig_scheduled_posts()
+            changed = False
+            now = time.time()
+            for post in posts:
+                if post.get("status") == "scheduled" and post.get("scheduled_time", 9999999999) <= now:
+                    print(f"[IG Scheduler] Publishing scheduled post {post.get('id')}...", flush=True)
+                    post["status"] = "publishing"
+                    save_ig_scheduled_posts(posts)
+                    
+                    success, result = publish_ig_media(post.get("media_url"), post.get("caption", ""))
+                    if success:
+                        post["status"] = "published"
+                        post["media_id"] = result
+                        post["published_at"] = time.time()
+                        print(f"[IG Scheduler] Successfully published post! Media ID: {result}", flush=True)
+                    else:
+                        post["status"] = "failed"
+                        post["error"] = result
+                        print(f"[IG Scheduler] Failed to publish: {result}", flush=True)
+                    changed = True
+            if changed:
+                save_ig_scheduled_posts(posts)
+        except Exception as e:
+            print(f"[IG Scheduler] Error in loop: {e}", flush=True)
+        time.sleep(15)
+
+
 
 
 def _ig_keyword_match(auto, text):
@@ -1180,20 +1591,17 @@ def run_ig_automations(trigger_type, text, media_id="", comment_id="", user_id="
         if not _ig_keyword_match(auto, text):
             continue
 
-        print(f"  IG Auto '{auto['name']}' matched ({trigger_type})")
+        print(f"  IG Auto '{auto['name']}' matched ({trigger_type})", flush=True)
 
         # Welcome DM: only fire once per user (first-time detection)
         if trigger_type == "welcome" and user_id:
             if ig_already_welcomed(user_id):
-                print(f"  [SKIP] Welcome DM already sent to {user_id}")
+                print(f"  [SKIP] Welcome DM already sent to {user_id}", flush=True)
                 continue
             ig_mark_welcomed(user_id)
 
-        # Optional send delay — makes bot appear more human
+        # Optional send delay — passed to queue instead of sleeping synchronously
         delay = int(auto.get("delay_seconds", 0))
-        if delay > 0:
-            print(f"  [Delay] Waiting {delay}s before sending...")
-            time.sleep(delay)
 
         action = auto.get("action", "both")
 
@@ -1202,10 +1610,45 @@ def run_ig_automations(trigger_type, text, media_id="", comment_id="", user_id="
 
         if action in ("dm", "both") and auto.get("dm_message"):
             dm_body = build_ig_dm_body(auto, username)
-            if comment_id:
-                send_ig_private_reply(comment_id, dm_body)
-            elif user_id:
-                send_ig_dm(user_id, dm_body)
+            
+            if auto.get("email_capture") and auto.get("email_prompt") and user_id:
+                if comment_id:
+                    send_ig_private_reply(comment_id, dm_body, recipient_id=user_id, automation_name=auto.get("name"), delay=delay)
+                else:
+                    send_ig_dm(user_id, dm_body, automation_name=auto.get("name"), delay=delay)
+                # Queue the email capture prompt to send 1s after the main message
+                send_ig_dm(user_id, auto["email_prompt"], automation_name=auto.get("name"), delay=delay + 1)
+                
+                # Transition state
+                conv_state = load_ig_conv_state()
+                conv_state[str(user_id)] = {
+                    "step": "awaiting_email",
+                    "automation_name": auto.get("name"),
+                    "updated_at": time.time()
+                }
+                save_ig_conv_state(conv_state)
+                
+            elif auto.get("follow_up_message") and user_id:
+                if comment_id:
+                    send_ig_private_reply(comment_id, dm_body, recipient_id=user_id, automation_name=auto.get("name"), delay=delay)
+                else:
+                    send_ig_dm(user_id, dm_body, automation_name=auto.get("name"), delay=delay)
+                # Queue follow up question to send 1s after the main message
+                send_ig_dm(user_id, auto["follow_up_message"], automation_name=auto.get("name"), delay=delay + 1)
+                
+                # Transition state
+                conv_state = load_ig_conv_state()
+                conv_state[str(user_id)] = {
+                    "step": "awaiting_followup",
+                    "automation_name": auto.get("name"),
+                    "updated_at": time.time()
+                }
+                save_ig_conv_state(conv_state)
+            else:
+                if comment_id:
+                    send_ig_private_reply(comment_id, dm_body, recipient_id=user_id, automation_name=auto.get("name"), delay=delay)
+                elif user_id:
+                    send_ig_dm(user_id, dm_body, automation_name=auto.get("name"), delay=delay)
 
         return True
     return False
@@ -1234,6 +1677,27 @@ def load_last_tester():
     return None
 
 
+import datetime
+
+def is_comment_within_7_days(created_time) -> bool:
+    if not created_time:
+        return True
+    try:
+        if isinstance(created_time, (int, float)):
+            epoch = float(created_time)
+        else:
+            try:
+                epoch = float(created_time)
+            except ValueError:
+                # Parse ISO 8601 formats
+                clean_dt = created_time.split("+")[0].split(".")[0]
+                dt = datetime.datetime.strptime(clean_dt, "%Y-%m-%dT%H:%M:%S")
+                epoch = dt.timestamp()
+        return (time.time() - epoch) <= (7 * 86400)
+    except Exception as e:
+        print(f"[Comment Date Check] Warning parsing date '{created_time}': {e}", flush=True)
+        return True
+
 def handle_ig_comment(value, trigger_type="comment"):
     comment_id = value.get("comment_id") or value.get("id", "")
     text       = (value.get("text") or "").lower().strip()
@@ -1242,24 +1706,48 @@ def handle_ig_comment(value, trigger_type="comment"):
     username   = value.get("from", {}).get("username", "")
     if not comment_id:
         return
-    print(f"[IG {trigger_type.upper()}] id={comment_id} from=@{username} text={text}")
+    print(f"[IG {trigger_type.upper()}] id={comment_id} from=@{username} text={text}", flush=True)
 
-    if IG_USER_ID and user_id == IG_USER_ID:
-        print("[SKIP] Own account comment")
+    if IG_USER_ID and str(user_id) == str(IG_USER_ID):
+        print("[SKIP] Own account comment", flush=True)
         return
 
+    # Rule 2: private reply must be sent within 7 days of comment
+    created_time = value.get("created_time")
+    if not is_comment_within_7_days(created_time):
+        print(f"[SKIP] Comment is older than 7 days (created_time={created_time})", flush=True)
+        return
+
+    # Auto-hide spam comments
+    settings = load_ig_settings()
+    spam_words_str = settings.get("spam_keywords", "")
+    if spam_words_str:
+        spam_words = [w.strip().lower() for w in spam_words_str.split(",") if w.strip()]
+        if any(w in text for w in spam_words):
+            print(f"[Auto-Moderation] ⚠️ Hiding comment {comment_id} due to spam match: '{text}'", flush=True)
+            try:
+                requests.post(
+                    f"{GRAPH_URL}/{comment_id}",
+                    data={"hide": True, "access_token": PAGE_ACCESS_TOKEN},
+                    timeout=8
+                )
+            except Exception as e:
+                print(f"[Auto-Moderation Error] Failed to hide comment: {e}", flush=True)
+            return
+
     save_last_tester(user_id, username)
+    record_user_interaction(user_id)
 
     dedup_key = f"ig:{trigger_type}:{user_id}:{media_id}:{text}"
     if ig_already_replied(dedup_key):
-        print(f"[SKIP] Already handled (dedup_key={dedup_key})")
+        print(f"[SKIP] Already handled (dedup_key={dedup_key})", flush=True)
         return
 
     if run_ig_automations(trigger_type, text, media_id, comment_id, user_id, username):
         if trigger_type == "live":
             bump_ig_stat("live_replies")
         ig_mark_replied(dedup_key)
-    print("  ---")
+    print("  ---", flush=True)
 
 
 def handle_ig_messaging(event):
@@ -1270,8 +1758,10 @@ def handle_ig_messaging(event):
     
     # Identify actual user (follower) ID to avoid registering the bot itself
     actual_user_id = recipient_id if is_echo else sender_id
-    if actual_user_id and actual_user_id != IG_USER_ID:
+    if actual_user_id and str(actual_user_id) != str(IG_USER_ID):
         save_last_tester(actual_user_id, "")
+        if not is_echo:
+            record_user_interaction(actual_user_id)
         
     if not sender_id or not message:
         return
@@ -1280,7 +1770,7 @@ def handle_ig_messaging(event):
     reply_to = message.get("reply_to") or {}
 
     if reply_to.get("story"):
-        print(f"[IG STORY REPLY] from={sender_id} text={text}")
+        print(f"[IG STORY REPLY] from={sender_id} text={text}", flush=True)
         dedup_key = f"ig:story:{sender_id}:{text}"
         if ig_already_replied(dedup_key):
             return
@@ -1290,20 +1780,64 @@ def handle_ig_messaging(event):
         return
 
     if text:
-        print(f"[IG DM] from={sender_id} text={text}")
-        dedup_key = f"ig:dm:{sender_id}:{text}"
-        if ig_already_replied(dedup_key):
-            return
-        if run_ig_automations("dm", text, user_id=sender_id):
-            bump_ig_stat("dm_triggers")
-            ig_mark_replied(dedup_key)
-            return
-        for kw, reply in load_ig_keywords().items():
-            if kw.lower() in text:
-                send_ig_dm(sender_id, reply)
+        if not is_echo:
+            print(f"[IG DM] from={sender_id} text={text}", flush=True)
+            
+            # ── State Interception ──
+            conv_state = load_ig_conv_state()
+            user_state = conv_state.get(str(sender_id))
+            
+            if user_state:
+                step = user_state.get("step")
+                auto_name = user_state.get("automation_name")
+                auto = next((a for a in load_ig_automations() if a.get("name") == auto_name), None)
+                
+                if step == "awaiting_email" and auto:
+                    if is_valid_email(text):
+                        email = text.strip()
+                        capture_ig_lead(user_id=sender_id, username="", email=email, automation_name=auto_name)
+                        confirm_msg = auto.get("email_success_message") or f"Thank you! We've saved your email: {email}"
+                        send_ig_dm(sender_id, confirm_msg, automation_name=auto_name)
+                        del conv_state[str(sender_id)]
+                        save_ig_conv_state(conv_state)
+                        return
+                    else:
+                        if text.lower() == "cancel":
+                            send_ig_dm(sender_id, "Email capture cancelled.", automation_name=auto_name)
+                            del conv_state[str(sender_id)]
+                            save_ig_conv_state(conv_state)
+                        else:
+                            retry_prompt = auto.get("email_retry_prompt") or "That doesn't look like a valid email. Please reply with a valid email address or type 'cancel' to skip."
+                            send_ig_dm(sender_id, retry_prompt, automation_name=auto_name)
+                        return
+                
+                elif step == "awaiting_followup" and auto:
+                    if is_positive_reply(text):
+                        pos_reply = auto.get("branch_yes_reply") or "Awesome! Glad to hear that."
+                        send_ig_dm(sender_id, pos_reply, automation_name=auto_name)
+                    elif is_negative_reply(text):
+                        neg_reply = auto.get("branch_no_reply") or "No problem. Let us know if you change your mind."
+                        send_ig_dm(sender_id, neg_reply, automation_name=auto_name)
+                    else:
+                        print(f"[IG State] User sent non-matching text in awaiting_followup. Clearing state.", flush=True)
+                    
+                    del conv_state[str(sender_id)]
+                    save_ig_conv_state(conv_state)
+                    return
+            
+            dedup_key = f"ig:dm:{sender_id}:{text}"
+            if ig_already_replied(dedup_key):
+                return
+            if run_ig_automations("dm", text, user_id=sender_id):
                 bump_ig_stat("dm_triggers")
                 ig_mark_replied(dedup_key)
                 return
+            for kw, reply in load_ig_keywords().items():
+                if kw.lower() in text:
+                    send_ig_dm(sender_id, reply)
+                    bump_ig_stat("dm_triggers")
+                    ig_mark_replied(dedup_key)
+                    return
 
 
 def handle_ig_mention(value):
@@ -1315,23 +1849,24 @@ def handle_ig_mention(value):
     user_id  = value.get("from", {}).get("id", "")
     username = value.get("from", {}).get("username", "")
     text     = (value.get("text") or "").lower().strip()
-    print(f"[IG MENTION] from=@{username} media={media_id} text={text}")
+    print(f"[IG MENTION] from=@{username} media={media_id} text={text}", flush=True)
 
-    if IG_USER_ID and user_id == IG_USER_ID:
-        print("[SKIP] Own account mention")
+    if IG_USER_ID and str(user_id) == str(IG_USER_ID):
+        print("[SKIP] Own account mention", flush=True)
         return
 
     save_last_tester(user_id, username)
+    record_user_interaction(user_id)
 
     dedup_key = f"ig:mention:{user_id}:{media_id}"
     if ig_already_replied(dedup_key):
-        print(f"[SKIP] Already handled mention (dedup_key={dedup_key})")
+        print(f"[SKIP] Already handled mention (dedup_key={dedup_key})", flush=True)
         return
 
     if run_ig_automations("mention", text, media_id=media_id, user_id=user_id, username=username):
         bump_ig_stat("mentions_handled")
         ig_mark_replied(dedup_key)
-    print("  ---")
+    print("  ---", flush=True)
 
 
 HTML = """
@@ -2593,7 +3128,100 @@ def ig_test_automation(idx):
 
 @app.route("/instagram/ui/stats")
 def ig_get_stats():
-    return jsonify(load_ig_stats())
+    local_stats = load_ig_stats()
+    
+    live_insights = {
+        "reach_day": 0,
+        "impressions_day": 0,
+        "follower_count": 0,
+        "reach_week": 0,
+        "impressions_week": 0
+    }
+    
+    if IG_USER_ID:
+        try:
+            # 1. Fetch user reach/impressions
+            resp = requests.get(
+                f"{GRAPH_URL}/{IG_USER_ID}/insights",
+                params={
+                    "metric": "reach,impressions",
+                    "period": "day",
+                    "access_token": PAGE_ACCESS_TOKEN
+                },
+                timeout=8
+            )
+            insights_data = resp.json()
+            if "data" in insights_data:
+                for metric in insights_data["data"]:
+                    name = metric.get("name")
+                    values = metric.get("values", [])
+                    if values:
+                        val = values[-1].get("value", 0)
+                        if name == "reach":
+                            live_insights["reach_day"] = val
+                        elif name == "impressions":
+                            live_insights["impressions_day"] = val
+                            
+            # 2. Fetch follower count
+            profile_resp = requests.get(
+                f"{GRAPH_URL}/{IG_USER_ID}",
+                params={
+                    "fields": "followers_count",
+                    "access_token": PAGE_ACCESS_TOKEN
+                },
+                timeout=8
+            )
+            profile_data = profile_resp.json()
+            if "followers_count" in profile_data:
+                live_insights["follower_count"] = profile_data["followers_count"]
+                
+        except Exception as e:
+            print(f"[Insights Fetch Error] Failed: {e}", flush=True)
+            
+    local_stats.update(live_insights)
+    
+    logs = load_ig_messages_log()
+    local_stats["total_queued"] = len(load_ig_messages_queue())
+    local_stats["total_logged"] = len(logs)
+    local_stats["total_success_dms"] = sum(1 for log in logs if log.get("status") == "success")
+    local_stats["total_failed_dms"] = sum(1 for log in logs if "failed" in str(log.get("status", "")))
+    local_stats["total_skipped_dms"] = sum(1 for log in logs if log.get("status") in ("skipped_24h_limit", "outside_messaging_window"))
+    
+    # Calculate top posts by engagement
+    top_posts = []
+    try:
+        media_list = fetch_ig_media()
+        for media in media_list[:8]:
+            try:
+                m_resp = requests.get(
+                    f"{GRAPH_URL}/{media['id']}",
+                    params={
+                        "fields": "comments_count,like_count",
+                        "access_token": PAGE_ACCESS_TOKEN
+                    },
+                    timeout=8
+                )
+                m_data = m_resp.json()
+                likes = m_data.get("like_count", 0)
+                comments = m_data.get("comments_count", 0)
+                engagement = likes + comments
+                top_posts.append({
+                    "id": media["id"],
+                    "caption": media["message"],
+                    "thumbnail": media["thumbnail"],
+                    "likes": likes,
+                    "comments": comments,
+                    "engagement": engagement
+                })
+            except Exception:
+                pass
+        top_posts.sort(key=lambda x: x["engagement"], reverse=True)
+    except Exception as e:
+        print(f"[Top Posts Fetch Error] {e}", flush=True)
+        
+    local_stats["top_posts"] = top_posts[:5]
+    
+    return jsonify(local_stats)
 
 @app.route("/instagram/ui/stats/reset", methods=["POST"])
 def ig_reset_stats():
@@ -2608,13 +3236,529 @@ def ig_settings_route():
         data     = request.json
         settings = load_ig_settings()
         settings["daily_dm_cap"] = max(1, int(data.get("daily_dm_cap", 200)))
+        settings["spam_keywords"] = data.get("spam_keywords", "")
+        settings["crm_webhook_url"] = data.get("crm_webhook_url", "")
         save_ig_settings(settings)
         return jsonify({"ok": True})
     settings = load_ig_settings()
     stats    = load_ig_stats()
     settings["dms_today"]       = stats.get("dms_today", 0)
     settings["dms_today_date"]  = stats.get("dms_today_date", "")
+    settings["spam_keywords"]   = settings.get("spam_keywords", "")
+    settings["crm_webhook_url"] = settings.get("crm_webhook_url", "")
     return jsonify(settings)
+
+
+# ── Comment Moderation endpoints ──
+@app.route("/instagram/ui/comments", methods=["GET"])
+def ig_get_comments():
+    try:
+        media_list = fetch_ig_media()
+        all_comments = []
+        for media in media_list[:10]:
+            media_id = media["id"]
+            thumbnail = media["thumbnail"]
+            try:
+                resp = requests.get(
+                    f"{GRAPH_URL}/{media_id}/comments",
+                    params={
+                        "fields": "id,text,timestamp,username,from,hidden",
+                        "access_token": PAGE_ACCESS_TOKEN
+                    },
+                    timeout=8
+                )
+                data = resp.json()
+                if "data" in data:
+                    for comment in data["data"]:
+                        all_comments.append({
+                            "id": comment["id"],
+                            "text": comment.get("text", ""),
+                            "username": comment.get("username") or comment.get("from", {}).get("username", "anonymous"),
+                            "timestamp": comment.get("timestamp", ""),
+                            "hidden": comment.get("hidden", False),
+                            "media_id": media_id,
+                            "media_thumbnail": thumbnail
+                        })
+            except Exception as e:
+                print(f"[Fetch Comments Error] Failed for media {media_id}: {e}", flush=True)
+                
+        all_comments.sort(key=lambda c: c.get("timestamp", ""), reverse=True)
+        return jsonify({"comments": all_comments})
+    except Exception as e:
+        return jsonify({"error": str(e), "comments": []})
+
+@app.route("/instagram/ui/comments/<comment_id>/reply", methods=["POST"])
+def ig_reply_comment_manual(comment_id):
+    try:
+        message = request.json.get("message")
+        if not message:
+            return jsonify({"ok": False, "error": "Message is empty"})
+        resp = requests.post(
+            f"{GRAPH_URL}/{comment_id}/replies",
+            data={"message": message, "access_token": PAGE_ACCESS_TOKEN},
+            timeout=8
+        )
+        result = resp.json()
+        if "id" in result:
+            bump_ig_stat("comment_replies")
+            return jsonify({"ok": True})
+        return jsonify({"ok": False, "error": result.get("error", {}).get("message", str(result))})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/instagram/ui/comments/<comment_id>/hide", methods=["POST"])
+def ig_hide_comment(comment_id):
+    try:
+        resp = requests.post(
+            f"{GRAPH_URL}/{comment_id}",
+            data={"hide": True, "access_token": PAGE_ACCESS_TOKEN},
+            timeout=8
+        )
+        result = resp.json()
+        if result.get("success"):
+            return jsonify({"ok": True})
+        return jsonify({"ok": False, "error": result.get("error", {}).get("message", str(result))})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/instagram/ui/comments/<comment_id>/unhide", methods=["POST"])
+def ig_unhide_comment(comment_id):
+    try:
+        resp = requests.post(
+            f"{GRAPH_URL}/{comment_id}",
+            data={"hide": False, "access_token": PAGE_ACCESS_TOKEN},
+            timeout=8
+        )
+        result = resp.json()
+        if result.get("success"):
+            return jsonify({"ok": True})
+        return jsonify({"ok": False, "error": result.get("error", {}).get("message", str(result))})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/instagram/ui/comments/<comment_id>", methods=["DELETE"])
+def ig_delete_comment(comment_id):
+    try:
+        resp = requests.delete(
+            f"{GRAPH_URL}/{comment_id}",
+            params={"access_token": PAGE_ACCESS_TOKEN},
+            timeout=8
+        )
+        result = resp.json()
+        if result.get("success"):
+            return jsonify({"ok": True})
+        return jsonify({"ok": False, "error": result.get("error", {}).get("message", str(result))})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+# ── Link-in-Bio endpoints ──
+@app.route("/instagram/ui/link-page", methods=["GET"])
+def ig_get_link_page():
+    pages = load_ig_link_pages()
+    username = load_ig_settings().get("username") or "instagram"
+    config = pages.get(username, {
+        "title": f"@{username}",
+        "bio": "Welcome to my profile!",
+        "btn_color": "#db2777",
+        "btn_text_color": "#ffffff",
+        "links": [],
+        "show_ig_feed": True
+    })
+    return jsonify(config)
+
+@app.route("/instagram/ui/link-page", methods=["POST"])
+def ig_save_link_page():
+    try:
+        data = request.json
+        pages = load_ig_link_pages()
+        username = load_ig_settings().get("username") or "instagram"
+        pages[username] = {
+            "title": data.get("title", f"@{username}"),
+            "bio": data.get("bio", ""),
+            "btn_color": data.get("btn_color", "#db2777"),
+            "btn_text_color": data.get("btn_text_color", "#ffffff"),
+            "links": data.get("links", []),
+            "show_ig_feed": bool(data.get("show_ig_feed", True)),
+            "avatar_url": data.get("avatar_url", "")
+        }
+        save_ig_link_pages(pages)
+        
+        # Save username to settings for quick lookup
+        settings = load_ig_settings()
+        settings["username"] = username
+        save_ig_settings(settings)
+        
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/ig/<username>")
+def ig_public_bio_page(username):
+    pages = load_ig_link_pages()
+    config = pages.get(username)
+    if not config:
+        config = {
+            "title": f"@{username}",
+            "bio": "Check out my links below!",
+            "btn_color": "#db2777",
+            "btn_text_color": "#ffffff",
+            "links": [],
+            "show_ig_feed": True
+        }
+    
+    media_items = []
+    if config.get("show_ig_feed", True):
+        try:
+            # Reuses the Graph API media fetch
+            media_items = fetch_ig_media()
+        except Exception as e:
+            print(f"[Bio Page Media Fetch Error] {e}", flush=True)
+            
+    bio_html = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{{ title }}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        <style>
+            :root {
+                --bg-base: #060913;
+                --bg-glass: rgba(15, 23, 42, 0.65);
+                --border-glass: rgba(255, 255, 255, 0.08);
+                --text-primary: #f3f4f6;
+                --text-secondary: #9ca3af;
+                --btn-bg: {{ btn_color }};
+                --btn-color: {{ btn_text_color }};
+            }
+            * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
+            body {
+                background-color: var(--bg-base);
+                background-image: radial-gradient(at 0% 0%, rgba(219,39,119,0.15) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(124,58,237,0.12) 0px, transparent 50%);
+                color: var(--text-primary);
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                padding: 40px 20px;
+            }
+            .bio-container {
+                width: 100%;
+                max-width: 580px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 24px;
+            }
+            .avatar {
+                width: 96px;
+                height: 96px;
+                border-radius: 50%;
+                background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+                padding: 4px;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            }
+            .avatar-inner {
+                width: 100%;
+                height: 100%;
+                border-radius: 50%;
+                background: var(--bg-base);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 32px;
+                overflow: hidden;
+            }
+            .avatar-inner img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            .header-info {
+                text-align: center;
+            }
+            .header-info h1 {
+                font-size: 22px;
+                font-weight: 700;
+                margin-bottom: 6px;
+                letter-spacing: -0.02em;
+            }
+            .header-info p {
+                font-size: 14px;
+                color: var(--text-secondary);
+                max-width: 400px;
+                line-height: 1.5;
+            }
+            .links-list {
+                width: 100%;
+                display: flex;
+                flex-direction: column;
+                gap: 14px;
+            }
+            .bio-link {
+                display: block;
+                width: 100%;
+                background: var(--btn-bg);
+                color: var(--btn-color);
+                border: 1px solid var(--border-glass);
+                padding: 16px 20px;
+                border-radius: 12px;
+                text-align: center;
+                text-decoration: none;
+                font-size: 15px;
+                font-weight: 600;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            .bio-link:hover {
+                transform: translateY(-2px);
+                filter: brightness(1.15);
+                box-shadow: 0 8px 25px rgba(219,39,119,0.3);
+            }
+            .media-section {
+                width: 100%;
+                margin-top: 12px;
+            }
+            .media-title {
+                font-size: 13px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.1em;
+                color: var(--text-secondary);
+                margin-bottom: 16px;
+                text-align: center;
+            }
+            .media-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 8px;
+            }
+            .media-card {
+                aspect-ratio: 1;
+                border-radius: 8px;
+                overflow: hidden;
+                border: 1px solid var(--border-glass);
+                position: relative;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                transition: transform 0.2s ease;
+            }
+            .media-card:hover {
+                transform: scale(1.03);
+            }
+            .media-card img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            .media-badge {
+                position: absolute;
+                top: 6px;
+                right: 6px;
+                background: rgba(0,0,0,0.6);
+                padding: 2px 5px;
+                border-radius: 4px;
+                font-size: 10px;
+            }
+            footer {
+                margin-top: 40px;
+                font-size: 12px;
+                color: var(--text-secondary);
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            footer a {
+                color: var(--text-primary);
+                text-decoration: none;
+                font-weight: 600;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="bio-container">
+            <div class="avatar">
+                <div class="avatar-inner">
+                    {% if avatar_url %}
+                        <img src="{{ avatar_url }}" alt="avatar">
+                    {% else %}
+                        📷
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="header-info">
+                <h1>{{ title }}</h1>
+                <p>{{ bio }}</p>
+            </div>
+            
+            <div class="links-list">
+                {% for link in links %}
+                    <a href="{{ link.url }}" target="_blank" class="bio-link">{{ link.label }}</a>
+                {% endfor %}
+            </div>
+            
+            {% if show_ig_feed and media_items %}
+            <div class="media-section">
+                <div class="media-title">Instagram Feed</div>
+                <div class="media-grid">
+                    {% for item in media_items %}
+                        <a href="{{ item.permalink or '#' }}" target="_blank" class="media-card">
+                            <img src="{{ item.thumbnail }}" alt="feed item">
+                            {% if item.media_type == 'video' %}
+                                <span class="media-badge">🎬</span>
+                            {% endif %}
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <footer>
+                Powered by <a href="https://superprofile.bio/" target="_blank">SuperProfile.bio</a>
+            </footer>
+        </div>
+    </body>
+    </html>
+    """
+    
+    clean_media = []
+    for item in media_items:
+        clean_media.append({
+            "thumbnail": item.get("thumbnail"),
+            "permalink": item.get("permalink") or f"https://www.instagram.com/p/{item.get('id')}/",
+            "media_type": item.get("media_type")
+        })
+        
+    return render_template_string(
+        bio_html,
+        title=config.get("title", f"@{username}"),
+        bio=config.get("bio", ""),
+        btn_color=config.get("btn_color", "#db2777"),
+        btn_text_color=config.get("btn_text_color", "#ffffff"),
+        avatar_url=config.get("avatar_url", ""),
+        links=config.get("links", []),
+        show_ig_feed=config.get("show_ig_feed", True),
+    )
+
+
+# ── Leads Capture endpoints ──
+@app.route("/instagram/ui/leads", methods=["GET"])
+def ig_get_leads():
+    return jsonify(load_ig_leads())
+
+@app.route("/instagram/ui/leads/export", methods=["GET"])
+def ig_export_leads_csv():
+    try:
+        leads = load_ig_leads()
+        
+        import io
+        import csv
+        from flask import Response
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write headers
+        writer.writerow(["Instagram ID", "Username", "Email", "Phone", "Automation Triggered", "Captured At"])
+        
+        for lead in leads:
+            cap_time = datetime.datetime.fromtimestamp(lead.get("captured_at", 0)).strftime("%Y-%m-%d %H:%M:%S") if lead.get("captured_at") else ""
+            writer.writerow([
+                lead.get("user_id", ""),
+                lead.get("username", ""),
+                lead.get("email", ""),
+                lead.get("phone", ""),
+                lead.get("automation_name", ""),
+                cap_time
+            ])
+            
+        csv_data = output.getvalue()
+        output.close()
+        
+        return Response(
+            csv_data,
+            mimetype="text/csv",
+            headers={"Content-disposition": "attachment; filename=ig_leads.csv"}
+        )
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+# ── Content Scheduler endpoints ──
+@app.route("/instagram/ui/schedule", methods=["GET"])
+def ig_get_scheduled_posts():
+    return jsonify(load_ig_scheduled_posts())
+
+@app.route("/instagram/ui/schedule", methods=["POST"])
+def ig_schedule_post():
+    try:
+        data = request.json
+        media_url = data.get("media_url")
+        caption = data.get("caption", "")
+        scheduled_time = float(data.get("scheduled_time", time.time()))
+        
+        if not media_url:
+            return jsonify({"ok": False, "error": "media_url is required"})
+            
+        posts = load_ig_scheduled_posts()
+        new_post = {
+            "id": str(int(time.time() * 1000)),
+            "media_url": media_url,
+            "caption": caption,
+            "scheduled_time": scheduled_time,
+            "status": "scheduled",
+            "error": ""
+        }
+        posts.append(new_post)
+        save_ig_scheduled_posts(posts)
+        return jsonify({"ok": True, "post": new_post})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+@app.route("/instagram/ui/schedule/<post_id>", methods=["DELETE"])
+def ig_delete_scheduled_post(post_id):
+    try:
+        posts = load_ig_scheduled_posts()
+        filtered = [p for p in posts if p.get("id") != post_id]
+        if len(filtered) < len(posts):
+            save_ig_scheduled_posts(filtered)
+            return jsonify({"ok": True})
+        return jsonify({"ok": False, "error": "Post not found"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
+# ── Instagram Setup status check ──
+@app.route("/instagram/ui/status-check", methods=["GET"])
+def ig_status_check():
+    if not PAGE_ID:
+        return jsonify({"ok": False, "linked": False, "error": "PAGE_ID is not configured in .env"})
+        
+    try:
+        resp = requests.get(
+            f"{GRAPH_URL}/{PAGE_ID}",
+            params={"fields": "instagram_business_account", "access_token": PAGE_ACCESS_TOKEN},
+            timeout=8
+        )
+        data = resp.json()
+        ig_id = data.get("instagram_business_account", {}).get("id")
+        if ig_id:
+            return jsonify({
+                "ok": True,
+                "linked": True,
+                "business_account_id": ig_id,
+                "message": "Account validation successful. Connected to Instagram Business/Creator account."
+            })
+        else:
+            return jsonify({
+                "ok": False,
+                "linked": False,
+                "error": "Connected Facebook Page is not linked to any Instagram Business/Creator account. Make sure your Instagram profile is converted to Creator or Business and linked to the Facebook Page."
+            })
+    except Exception as e:
+        return jsonify({"ok": False, "linked": False, "error": f"API connection error: {str(e)}"})
 
 
 @app.route("/webhook", methods=["GET"])
@@ -2629,6 +3773,21 @@ def verify():
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
+    # Meta signature validation (X-Hub-Signature-256)
+    signature_header = request.headers.get("X-Hub-Signature-256")
+    if signature_header and IG_APP_SECRET:
+        try:
+            sha_name, signature = signature_header.split("=")
+            if sha_name == "sha256":
+                mac = hmac.new(IG_APP_SECRET.encode("utf-8"), request.get_data(), hashlib.sha256)
+                if not hmac.compare_digest(mac.hexdigest(), signature):
+                    print("[Webhook Validation] ❌ Signature verification failed!", flush=True)
+                    return "Invalid signature", 403
+                print("[Webhook Validation] ✅ Signature verification passed.", flush=True)
+        except Exception as e:
+            print(f"[Webhook Validation] ❌ Error verifying signature: {e}", flush=True)
+            return "Signature verification error", 403
+
     data = request.json
     obj  = data.get("object")
     print(f"[Webhook Received] object={obj} payload={json.dumps(data)}")
@@ -2706,6 +3865,12 @@ except Exception as e:
     print(f"[Subscribe error] {e}")
 
 if __name__ == "__main__":
+    # Start background queue worker
+    import threading
+    threading.Thread(target=ig_queue_worker, daemon=True).start()
+    # Start background scheduler worker
+    threading.Thread(target=ig_scheduler_worker, daemon=True).start()
+    
     # Dynamically bind port to the environment variable FLASK_PORT
     port = int(os.environ.get("FLASK_PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)

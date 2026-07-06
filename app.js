@@ -711,6 +711,18 @@ app.use('/fb', createProxyMiddleware({
         }
     }
 }));
+app.use('/ig', createProxyMiddleware({
+    target: `http://127.0.0.1:${FB_BOT_PORT}`,
+    changeOrigin: true,
+    on: {
+        error: (err, req, res) => {
+            console.error('[IG Proxy] Error:', err.message);
+            if (!res.headersSent) {
+                res.status(502).send('<html><body style="background:#07090f;color:#ef4444;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><div style="font-size:2rem">⚠️</div><div style="margin-top:1rem;font-size:1rem">IG Profile Service starting up...<br><small style="color:#64748b">Refresh in a few seconds</small></div></div></body></html>');
+            }
+        }
+    }
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
