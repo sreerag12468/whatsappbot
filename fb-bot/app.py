@@ -30,20 +30,32 @@ app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix='/fb')
 
 
 # Instagram & FB credentials mapping
-IG_ACCESS_TOKEN        = os.getenv("IG_ACCESS_TOKEN") or os.getenv("PAGE_ACCESS_TOKEN", "EAAOEye5xXB4BR9A8DuLQt4K2MqxaI37G0dqxxes8RTyXS5NwvXo9x97gjXHFwtR0u35HqDXXfooue4mZBcyCyToPnthEtAzTjmOKTZBZAeGLw5XZBDGfsPsAPYfYaZBGZCgbgRPs88ajq9qDUbOWmwJpSkphZClZAXuF6cj0KoB7NkD0xNEEpiqCEZCoBiiSBts3PMgZDZD")
-IG_BUSINESS_ACCOUNT_ID = os.getenv("IG_BUSINESS_ACCOUNT_ID") or os.getenv("IG_USER_ID", "17841451641925459")
+# Instagram & FB credentials mapping
+IG_ACCESS_TOKEN        = os.getenv("IG_ACCESS_TOKEN") or os.getenv("PAGE_ACCESS_TOKEN")
+IG_BUSINESS_ACCOUNT_ID = os.getenv("IG_BUSINESS_ACCOUNT_ID") or os.getenv("IG_USER_ID")
 IG_APP_ID              = os.getenv("IG_APP_ID") or os.getenv("APP_ID")
 IG_APP_SECRET          = os.getenv("IG_APP_SECRET") or os.getenv("APP_SECRET")
-WEBHOOK_VERIFY_TOKEN   = os.getenv("WEBHOOK_VERIFY_TOKEN") or os.getenv("VERIFY_TOKEN", "myverifytoken")
+WEBHOOK_VERIFY_TOKEN   = os.getenv("WEBHOOK_VERIFY_TOKEN") or os.getenv("VERIFY_TOKEN")
+PAGE_ID                = os.getenv("PAGE_ID")
+GRAPH_API_VERSION      = os.getenv("GRAPH_API_VERSION", "v19.0")
+
+# Strict startup validation check (fails loudly if any required var is missing)
+missing_vars = []
+if not IG_ACCESS_TOKEN: missing_vars.append("IG_ACCESS_TOKEN / PAGE_ACCESS_TOKEN")
+if not IG_BUSINESS_ACCOUNT_ID: missing_vars.append("IG_BUSINESS_ACCOUNT_ID / IG_USER_ID")
+if not IG_APP_ID: missing_vars.append("IG_APP_ID / APP_ID")
+if not IG_APP_SECRET: missing_vars.append("IG_APP_SECRET / APP_SECRET")
+if not WEBHOOK_VERIFY_TOKEN: missing_vars.append("WEBHOOK_VERIFY_TOKEN / VERIFY_TOKEN")
+if not PAGE_ID: missing_vars.append("PAGE_ID")
+
+if missing_vars:
+    raise RuntimeError(f"Startup failed: Missing required environment variables: {', '.join(missing_vars)}")
 
 # Map back to existing script variable names
 PAGE_ACCESS_TOKEN      = IG_ACCESS_TOKEN
 IG_USER_ID             = IG_BUSINESS_ACCOUNT_ID
 VERIFY_TOKEN           = WEBHOOK_VERIFY_TOKEN
-
-PAGE_ID           = os.getenv("PAGE_ID", "657207910809297")
-GRAPH_API_VERSION = os.getenv("GRAPH_API_VERSION", "v19.0")
-GRAPH_URL         = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
+GRAPH_URL              = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
 
 
 BASE_DIR          = os.path.dirname(os.path.abspath(__file__))
@@ -70,6 +82,309 @@ def get_flow_path(filename):
 CONV_STATE_PATH = get_flow_path("conversation_state.json")
 ORDER_FLOW_CONFIG_PATH = get_flow_path("order_flow_config.json")
 ORDERS_PATH = get_flow_path("orders.json")
+
+# SQLite Core setup
+import sqlite3
+import threading
+
+db_lock = threading.Lock()
+DB_FILE = get_flow_path("ig_automation.db")
+
+def get_db_conn():
+    conn = sqlite3.connect(DB_FILE, timeout=10.0)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def db_execute(query, params=(), commit=False):
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            if commit:
+                conn.commit()
+                return cursor.lastrowid
+            return cursor.fetchall()
+        finally:
+            conn.close()
+
+def db_execute_script(script):
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            conn.executescript(script)
+            conn.commit()
+        finally:
+            conn.close()
+
+def init_sqlite_db():
+    schema = """
+    CREATE TABLE IF NOT EXISTS ig_automations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        reply TEXT,
+        action TEXT,
+        dm_message TEXT,
+        trigger_type TEXT,
+        scope TEXT,
+        post_ids TEXT,
+        thumbnail TEXT,
+        keyword_type TEXT,
+        keywords TEXT,
+        active INTEGER,
+        delay_seconds INTEGER,
+        link_url TEXT,
+        follow_up_message TEXT,
+        ask_follow INTEGER,
+        follow_prompt TEXT,
+        email_capture INTEGER,
+        email_prompt TEXT
+    );
+    CREATE TABLE IF NOT EXISTS ig_leads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT,
+        user_id TEXT,
+        username TEXT,
+        automation_name TEXT,
+        captured_at REAL
+    );
+    CREATE TABLE IF NOT EXISTS ig_replied (
+        comment_id TEXT PRIMARY KEY,
+        timestamp REAL
+    );
+    CREATE TABLE IF NOT EXISTS ig_messages_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recipient_id TEXT,
+        text TEXT,
+        status TEXT,
+        sent_at REAL,
+        is_automated INTEGER,
+        is_private_reply INTEGER,
+        automation_name TEXT
+    );
+    CREATE TABLE IF NOT EXISTS ig_messages_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        payload TEXT,
+        scheduled_at REAL,
+        processed INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS ig_scheduled_posts (
+        id TEXT PRIMARY KEY,
+        media_url TEXT,
+        caption TEXT,
+        scheduled_time REAL,
+        status TEXT,
+        error TEXT
+    );
+    CREATE TABLE IF NOT EXISTS ig_user_interactions (
+        user_id TEXT PRIMARY KEY,
+        last_interaction REAL
+    );
+    CREATE TABLE IF NOT EXISTS ig_welcomed (
+        user_id TEXT PRIMARY KEY,
+        welcomed_at REAL
+    );
+    CREATE TABLE IF NOT EXISTS ig_stats (
+        key TEXT PRIMARY KEY,
+        value INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS ig_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+    );
+    CREATE TABLE IF NOT EXISTS ig_flows (
+        flow_key TEXT PRIMARY KEY,
+        steps TEXT
+    );
+    CREATE TABLE IF NOT EXISTS ig_conv_state (
+        user_id TEXT PRIMARY KEY,
+        step TEXT,
+        answers TEXT,
+        updatedAt REAL
+    );
+    CREATE TABLE IF NOT EXISTS ig_token_health (
+        key TEXT PRIMARY KEY,
+        status TEXT,
+        expires_at REAL,
+        last_check REAL,
+        scopes TEXT,
+        error TEXT
+    );
+    """
+    db_execute_script(schema)
+    _migrate_legacy_json_files()
+
+def _migrate_legacy_json_files():
+    # 1. ig_automations.json
+    if os.path.exists(IG_AUTOMATIONS_FILE):
+        try:
+            with open(IG_AUTOMATIONS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                for rule in data:
+                    active = 1 if rule.get("active") is not False else 0
+                    db_execute(
+                        "INSERT INTO ig_automations (name, reply, action, dm_message, trigger_type, scope, post_ids, thumbnail, keyword_type, keywords, active, delay_seconds, link_url, follow_up_message, ask_follow, follow_prompt, email_capture, email_prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            rule.get("name"),
+                            rule.get("reply"),
+                            rule.get("action"),
+                            rule.get("dm_message"),
+                            rule.get("trigger_type"),
+                            rule.get("scope"),
+                            json.dumps(rule.get("post_ids") or []),
+                            rule.get("thumbnail"),
+                            rule.get("keyword_type"),
+                            json.dumps(rule.get("keywords") or []),
+                            active,
+                            rule.get("delay_seconds") or 0,
+                            rule.get("link_url"),
+                            rule.get("follow_up_message"),
+                            1 if rule.get("ask_follow") else 0,
+                            rule.get("follow_prompt"),
+                            1 if rule.get("email_capture") else 0,
+                            rule.get("email_prompt")
+                        ),
+                        commit=True
+                    )
+            os.rename(IG_AUTOMATIONS_FILE, IG_AUTOMATIONS_FILE + ".bak")
+            print("[Migration] Migrated ig_automations.json successfully.")
+        except Exception as e:
+            print(f"[Migration Error] ig_automations: {e}")
+
+    # 2. ig_leads.json
+    if os.path.exists(IG_LEADS_FILE):
+        try:
+            with open(IG_LEADS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                for lead in data:
+                    db_execute(
+                        "INSERT INTO ig_leads (email, user_id, username, automation_name, captured_at) VALUES (?, ?, ?, ?, ?)",
+                        (
+                            lead.get("email"),
+                            lead.get("user_id"),
+                            lead.get("username"),
+                            lead.get("automation_name"),
+                            lead.get("captured_at") or time.time()
+                        ),
+                        commit=True
+                    )
+            os.rename(IG_LEADS_FILE, IG_LEADS_FILE + ".bak")
+            print("[Migration] Migrated ig_leads.json successfully.")
+        except Exception as e:
+            print(f"[Migration Error] ig_leads: {e}")
+
+    # 3. ig_stats.json
+    if os.path.exists(IG_STATS_FILE):
+        try:
+            with open(IG_STATS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    if k == "dms_today_date":
+                        db_execute("INSERT OR REPLACE INTO ig_settings (key, value) VALUES (?, ?)", (k, str(v)), commit=True)
+                    else:
+                        db_execute("INSERT OR REPLACE INTO ig_stats (key, value) VALUES (?, ?)", (k, int(v or 0)), commit=True)
+            os.rename(IG_STATS_FILE, IG_STATS_FILE + ".bak")
+            print("[Migration] Migrated ig_stats.json successfully.")
+        except Exception as e:
+            print(f"[Migration Error] ig_stats: {e}")
+
+    # 4. ig_settings.json
+    if os.path.exists(IG_SETTINGS_FILE):
+        try:
+            with open(IG_SETTINGS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                db_execute("INSERT OR REPLACE INTO ig_settings (key, value) VALUES ('general_settings', ?)", (json.dumps(data),), commit=True)
+            os.rename(IG_SETTINGS_FILE, IG_SETTINGS_FILE + ".bak")
+            print("[Migration] Migrated ig_settings.json successfully.")
+        except Exception as e:
+            print(f"[Migration Error] ig_settings: {e}")
+
+    # 5. ig_scheduled_posts.json
+    if os.path.exists(IG_SCHEDULED_POSTS_FILE):
+        try:
+            with open(IG_SCHEDULED_POSTS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                for post in data:
+                    db_execute(
+                        "INSERT OR REPLACE INTO ig_scheduled_posts (id, media_url, caption, scheduled_time, status, error) VALUES (?, ?, ?, ?, ?, ?)",
+                        (
+                            post.get("id"),
+                            post.get("media_url"),
+                            post.get("caption"),
+                            post.get("scheduled_time"),
+                            post.get("status"),
+                            post.get("error")
+                        ),
+                        commit=True
+                    )
+            os.rename(IG_SCHEDULED_POSTS_FILE, IG_SCHEDULED_POSTS_FILE + ".bak")
+            print("[Migration] Migrated ig_scheduled_posts.json successfully.")
+        except Exception as e:
+            print(f"[Migration Error] ig_scheduled_posts: {e}")
+
+    # 6. ig_flows.json
+    if os.path.exists(IG_FLOWS_FILE):
+        try:
+            with open(IG_FLOWS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    db_execute("INSERT OR REPLACE INTO ig_flows (flow_key, steps) VALUES (?, ?)", (k, json.dumps(v)), commit=True)
+            os.rename(IG_FLOWS_FILE, IG_FLOWS_FILE + ".bak")
+            print("[Migration] Migrated ig_flows.json successfully.")
+        except Exception as e:
+            print(f"[Migration Error] ig_flows: {e}")
+
+    # 7. ig_replied.json
+    if os.path.exists(IG_REPLIED_FILE):
+        try:
+            with open(IG_REPLIED_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                for cid in data:
+                    db_execute("INSERT OR REPLACE INTO ig_replied (comment_id, timestamp) VALUES (?, ?)", (cid, time.time()), commit=True)
+            os.rename(IG_REPLIED_FILE, IG_REPLIED_FILE + ".bak")
+            print("[Migration] Migrated ig_replied.json successfully.")
+        except Exception as e:
+            print(f"[Migration Error] ig_replied: {e}")
+
+    # 8. ig_welcomed.json
+    if os.path.exists(IG_WELCOMED_FILE):
+        try:
+            with open(IG_WELCOMED_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                for uid in data:
+                    db_execute("INSERT OR REPLACE INTO ig_welcomed (user_id, welcomed_at) VALUES (?, ?)", (uid, time.time()), commit=True)
+            os.rename(IG_WELCOMED_FILE, IG_WELCOMED_FILE + ".bak")
+            print("[Migration] Migrated ig_welcomed.json successfully.")
+        except Exception as e:
+            print(f"[Migration Error] ig_welcomed: {e}")
+
+    # 9. ig_messages_queue.json
+    if os.path.exists(IG_MESSAGES_QUEUE_FILE):
+        try:
+            with open(IG_MESSAGES_QUEUE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                for item in data:
+                    db_execute(
+                        "INSERT INTO ig_messages_queue (payload, scheduled_at, processed) VALUES (?, ?, 0)",
+                        (json.dumps(item), item.get("scheduled_at") or time.time()),
+                        commit=True
+                    )
+            os.rename(IG_MESSAGES_QUEUE_FILE, IG_MESSAGES_QUEUE_FILE + ".bak")
+            print("[Migration] Migrated ig_messages_queue.json successfully.")
+        except Exception as e:
+            print(f"[Migration Error] ig_messages_queue: {e}")
+
+init_sqlite_db()
+
 
 def load_conv_state():
     if not os.path.exists(CONV_STATE_PATH):
@@ -267,8 +582,8 @@ def fetch_page_posts(force=False):
         return _posts_cache
     print("[Cache] Fetching fresh posts from Facebook...")
     
-    tokens_to_try = [PAGE_ACCESS_TOKEN, "EAAOEye5xXB4BR9A8DuLQt4K2MqxaI37G0dqxxes8RTyXS5NwvXo9x97gjXHFwtR0u35HqDXXfooue4mZBcyCyToPnthEtAzTjmOKTZBZAeGLw5XZBDGfsPsAPYfYaZBGZCgbgRPs88ajq9qDUbOWmwJpSkphZClZAXuF6cj0KoB7NkD0xNEEpiqCEZCoBiiSBts3PMgZDZD", "EAAOEye5xXB4BRzz8MnN62XaqxROB40ES6qPY1PY0Vpf5jpZAjsCAu0ZCOs9cNQqRgZAp9NrKJp8bMtIOhe3bWPovQJFlwcYkDuLytihtDXKeqHQvoJQERMKQ5xPZCepNLve3G6jU1Dyb4rtZAPKv2MeqB2IqsEolCGe4tu9nYdC7ZB0nMLoOKZBvazjZCzDmS8ZBm6kIbE9ZBY"]
-    tokens_to_try = list(dict.fromkeys(t for t in tokens_to_try if t))
+    tokens_to_try = [PAGE_ACCESS_TOKEN]
+    tokens_to_try = [t for t in tokens_to_try if t]
     
     last_error = None
     for token in tokens_to_try:
@@ -469,36 +784,144 @@ _ig_media_cache_time = 0
 _ig_replied_set      = set()
 
 
+# ── SQLite Database Access Adapters ──
 def load_ig_keywords():
-    if os.path.exists(IG_KEYWORDS_FILE):
-        with open(IG_KEYWORDS_FILE) as f:
-            return json.load(f)
-    return {}
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM ig_settings WHERE key = 'keywords'")
+        row = cursor.fetchone()
+        if row:
+            return json.loads(row["value"])
+        return {}
+    except Exception as e:
+        print(f"Error loading IG keywords: {e}")
+        return {}
+    finally:
+        conn.close()
 
 def save_ig_keywords(data):
-    with open(IG_KEYWORDS_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("INSERT OR REPLACE INTO ig_settings (key, value) VALUES ('keywords', ?)", (json.dumps(data),))
+            conn.commit()
+        except Exception as e:
+            print(f"Error saving IG keywords: {e}")
+        finally:
+            conn.close()
 
 def load_ig_automations():
-    if os.path.exists(IG_AUTOMATIONS_FILE):
-        with open(IG_AUTOMATIONS_FILE) as f:
-            return json.load(f)
-    return []
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM ig_automations")
+        rows = cursor.fetchall()
+        rules = []
+        for r in rows:
+            rules.append({
+                "name": r["name"],
+                "reply": r["reply"],
+                "action": r["action"],
+                "dm_message": r["dm_message"],
+                "trigger_type": r["trigger_type"],
+                "scope": r["scope"],
+                "post_ids": json.loads(r["post_ids"] or "[]"),
+                "thumbnail": r["thumbnail"],
+                "keyword_type": r["keyword_type"],
+                "keywords": json.loads(r["keywords"] or "[]"),
+                "active": bool(r["active"]),
+                "delay_seconds": r["delay_seconds"],
+                "link_url": r["link_url"],
+                "follow_up_message": r["follow_up_message"],
+                "ask_follow": bool(r["ask_follow"]),
+                "follow_prompt": r["follow_prompt"],
+                "email_capture": bool(r["email_capture"]),
+                "email_prompt": r["email_prompt"]
+            })
+        return rules
+    except Exception as e:
+        print(f"Error loading IG automations: {e}")
+        return []
+    finally:
+        conn.close()
 
 def save_ig_automations(data):
-    with open(IG_AUTOMATIONS_FILE, "w") as f:
-        json.dump(data, f, indent=2)
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM ig_automations")
+            for rule in data:
+                cursor.execute(
+                    "INSERT INTO ig_automations (name, reply, action, dm_message, trigger_type, scope, post_ids, thumbnail, keyword_type, keywords, active, delay_seconds, link_url, follow_up_message, ask_follow, follow_prompt, email_capture, email_prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        rule.get("name"),
+                        rule.get("reply"),
+                        rule.get("action"),
+                        rule.get("dm_message"),
+                        rule.get("trigger_type"),
+                        rule.get("scope"),
+                        json.dumps(rule.get("post_ids") or []),
+                        rule.get("thumbnail"),
+                        rule.get("keyword_type"),
+                        json.dumps(rule.get("keywords") or []),
+                        1 if rule.get("active") else 0,
+                        rule.get("delay_seconds") or 0,
+                        rule.get("link_url"),
+                        rule.get("follow_up_message"),
+                        1 if rule.get("ask_follow") else 0,
+                        rule.get("follow_prompt"),
+                        1 if rule.get("email_capture") else 0,
+                        rule.get("email_prompt")
+                    )
+                )
+            conn.commit()
+        except Exception as e:
+            print(f"Error saving IG automations: {e}")
+        finally:
+            conn.close()
 
 def load_ig_stats():
-    if os.path.exists(IG_STATS_FILE):
-        with open(IG_STATS_FILE) as f:
-            return json.load(f)
-    return {"comment_replies": 0, "dms_sent": 0, "story_replies": 0, "live_replies": 0,
-            "dm_triggers": 0, "mentions_handled": 0, "dms_today": 0, "dms_today_date": ""}
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT key, value FROM ig_stats")
+        rows = cursor.fetchall()
+        stats = {"comment_replies": 0, "dms_sent": 0, "story_replies": 0, "live_replies": 0,
+                 "dm_triggers": 0, "mentions_handled": 0, "dms_today": 0, "dms_today_date": ""}
+        for r in rows:
+            if r["key"] in stats:
+                stats[r["key"]] = int(r["value"] or 0)
+        # Fetch dms_today_date from settings
+        cursor.execute("SELECT value FROM ig_settings WHERE key = 'dms_today_date'")
+        date_row = cursor.fetchone()
+        if date_row:
+            stats["dms_today_date"] = date_row["value"]
+        return stats
+    except Exception as e:
+        print(f"Error loading IG stats: {e}")
+        return {"comment_replies": 0, "dms_sent": 0, "story_replies": 0, "live_replies": 0,
+                 "dm_triggers": 0, "mentions_handled": 0, "dms_today": 0, "dms_today_date": ""}
+    finally:
+        conn.close()
 
 def save_ig_stats(stats):
-    with open(IG_STATS_FILE, "w") as f:
-        json.dump(stats, f, indent=2)
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            for k, v in stats.items():
+                if k == "dms_today_date":
+                    cursor.execute("INSERT OR REPLACE INTO ig_settings (key, value) VALUES (?, ?)", (k, str(v)))
+                else:
+                    cursor.execute("INSERT OR REPLACE INTO ig_stats (key, value) VALUES (?, ?)", (k, int(v or 0)))
+            conn.commit()
+        except Exception as e:
+            print(f"Error saving IG stats: {e}")
+        finally:
+            conn.close()
 
 def bump_ig_stat(key):
     stats = load_ig_stats()
@@ -506,192 +929,338 @@ def bump_ig_stat(key):
     save_ig_stats(stats)
 
 def _load_ig_replied_from_file():
-    global _ig_replied_set
-    try:
-        if os.path.exists(IG_REPLIED_FILE):
-            with open(IG_REPLIED_FILE) as f:
-                _ig_replied_set = set(json.load(f))
-            print(f"[IG Replied] Loaded {len(_ig_replied_set)} IDs")
-    except Exception as e:
-        print(f"[IG Replied] Load error: {e}")
-        _ig_replied_set = set()
+    pass
 
 def _save_ig_replied_to_file():
-    try:
-        ids = list(_ig_replied_set)[-MAX_REPLIED_STORE:]
-        with open(IG_REPLIED_FILE, "w") as f:
-            json.dump(ids, f)
-    except Exception as e:
-        print(f"[IG Replied] Save error: {e}")
+    pass
 
 def ig_already_replied(key):
-    return key in _ig_replied_set
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM ig_messages_log WHERE comment_id = ?", (key,))
+        return cursor.fetchone() is not None
+    except Exception:
+        return False
+    finally:
+        conn.close()
 
 def ig_mark_replied(key):
-    _ig_replied_set.add(key)
-    if len(_ig_replied_set) > MAX_REPLIED_STORE:
-        trimmed = list(_ig_replied_set)[-MAX_REPLIED_STORE:]
-        _ig_replied_set.clear()
-        _ig_replied_set.update(trimmed)
-    _save_ig_replied_to_file()
-
-
-# ── Welcome DM tracking (first-time per user only) ──────────────────────────────────
-_ig_welcomed_set: set = set()
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("INSERT OR REPLACE INTO ig_messages_log (comment_id, timestamp, success) VALUES (?, ?, 1)", (key, time.time()))
+            conn.commit()
+        except Exception as e:
+            print(f"Error marking replied: {e}")
+        finally:
+            conn.close()
 
 def _load_ig_welcomed():
-    global _ig_welcomed_set
-    try:
-        if os.path.exists(IG_WELCOMED_FILE):
-            with open(IG_WELCOMED_FILE) as f:
-                _ig_welcomed_set = set(json.load(f))
-            print(f"[IG Welcomed] Loaded {len(_ig_welcomed_set)} user IDs")
-    except Exception:
-        _ig_welcomed_set = set()
+    pass
 
 def _save_ig_welcomed():
-    try:
-        with open(IG_WELCOMED_FILE, "w") as f:
-            json.dump(list(_ig_welcomed_set)[-MAX_REPLIED_STORE:], f)
-    except Exception as e:
-        print(f"[IG Welcomed] Save error: {e}")
+    pass
 
 def ig_already_welcomed(user_id):
-    return user_id in _ig_welcomed_set
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM ig_welcomed WHERE user_id = ?", (str(user_id),))
+        return cursor.fetchone() is not None
+    except Exception:
+        return False
+    finally:
+        conn.close()
 
 def ig_mark_welcomed(user_id):
-    _ig_welcomed_set.add(user_id)
-    _save_ig_welcomed()
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("INSERT OR REPLACE INTO ig_welcomed (user_id, welcomed_at) VALUES (?, ?)", (str(user_id), time.time()))
+            conn.commit()
+        except Exception as e:
+            print(f"Error marking welcomed: {e}")
+        finally:
+            conn.close()
 
-
-# ── Instagram settings (daily DM cap) ───────────────────────────────────────────
 def load_ig_settings():
-    if os.path.exists(IG_SETTINGS_FILE):
-        with open(IG_SETTINGS_FILE) as f:
-            return json.load(f)
-    return {"daily_dm_cap": 200}
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM ig_settings WHERE key = 'general_settings'")
+        row = cursor.fetchone()
+        if row:
+            return json.loads(row["value"])
+        return {"daily_dm_cap": 200}
+    except Exception as e:
+        print(f"Error loading settings: {e}")
+        return {"daily_dm_cap": 200}
+    finally:
+        conn.close()
 
 def save_ig_settings(data):
-    with open(IG_SETTINGS_FILE, "w") as f:
-        json.dump(data, f, indent=2)
-
-
-# ── New Instagram Database load/save helpers ──
-def load_ig_messages_log():
-    if os.path.exists(IG_MESSAGES_LOG_FILE):
+    with db_lock:
+        conn = get_db_conn()
         try:
-            with open(IG_MESSAGES_LOG_FILE, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+            cursor = conn.cursor()
+            cursor.execute("INSERT OR REPLACE INTO ig_settings (key, value) VALUES ('general_settings', ?)", (json.dumps(data),))
+            conn.commit()
+        except Exception as e:
+            print(f"Error saving settings: {e}")
+        finally:
+            conn.close()
+
+def load_ig_messages_log():
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT comment_id, timestamp, success FROM ig_messages_log")
+        rows = cursor.fetchall()
+        return [{"comment_id": r["comment_id"], "timestamp": r["timestamp"], "success": bool(r["success"])} for r in rows]
+    except Exception as e:
+        print(f"Error loading message logs: {e}")
+        return []
+    finally:
+        conn.close()
 
 def save_ig_messages_log(data):
-    try:
-        with open(IG_MESSAGES_LOG_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"Error saving IG message logs: {e}")
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM ig_messages_log")
+            for entry in data:
+                cursor.execute(
+                    "INSERT OR REPLACE INTO ig_messages_log (comment_id, timestamp, success) VALUES (?, ?, ?)",
+                    (entry.get("comment_id"), entry.get("timestamp"), 1 if entry.get("success") else 0)
+                )
+            conn.commit()
+        except Exception as e:
+            print(f"Error saving message logs: {e}")
+        finally:
+            conn.close()
 
 def load_ig_messages_queue():
-    if os.path.exists(IG_MESSAGES_QUEUE_FILE):
-        try:
-            with open(IG_MESSAGES_QUEUE_FILE, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT payload FROM ig_messages_queue WHERE processed = 0")
+        rows = cursor.fetchall()
+        return [json.loads(r["payload"]) for r in rows]
+    except Exception as e:
+        print(f"Error loading message queue: {e}")
+        return []
+    finally:
+        conn.close()
 
 def save_ig_messages_queue(data):
-    try:
-        with open(IG_MESSAGES_QUEUE_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"Error saving IG message queue: {e}")
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM ig_messages_queue WHERE processed = 0")
+            for item in data:
+                cursor.execute(
+                    "INSERT INTO ig_messages_queue (payload, scheduled_at, processed) VALUES (?, ?, 0)",
+                    (json.dumps(item), item.get("scheduled_at") or time.time())
+                )
+            conn.commit()
+        except Exception as e:
+            print(f"Error saving message queue: {e}")
+        finally:
+            conn.close()
 
 def load_ig_leads():
-    if os.path.exists(IG_LEADS_FILE):
-        try:
-            with open(IG_LEADS_FILE, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT email, user_id, username, automation_name, captured_at FROM ig_leads")
+        rows = cursor.fetchall()
+        return [{
+            "email": r["email"],
+            "user_id": r["user_id"],
+            "username": r["username"],
+            "automation_name": r["automation_name"],
+            "captured_at": r["captured_at"]
+        } for r in rows]
+    except Exception as e:
+        print(f"Error loading leads: {e}")
+        return []
+    finally:
+        conn.close()
 
 def save_ig_leads(data):
-    try:
-        with open(IG_LEADS_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"Error saving IG leads: {e}")
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM ig_leads")
+            for lead in data:
+                cursor.execute(
+                    "INSERT INTO ig_leads (email, user_id, username, automation_name, captured_at) VALUES (?, ?, ?, ?, ?)",
+                    (
+                        lead.get("email"),
+                        lead.get("user_id"),
+                        lead.get("username"),
+                        lead.get("automation_name"),
+                        lead.get("captured_at") or time.time()
+                    )
+                )
+            conn.commit()
+        except Exception as e:
+            print(f"Error saving leads: {e}")
+        finally:
+            conn.close()
 
 def load_ig_link_pages():
-    if os.path.exists(IG_LINK_PAGES_FILE):
-        try:
-            with open(IG_LINK_PAGES_FILE, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM ig_settings WHERE key = 'link_pages'")
+        row = cursor.fetchone()
+        if row:
+            return json.loads(row["value"])
+        return {}
+    except Exception as e:
+        print(f"Error loading link pages: {e}")
+        return {}
+    finally:
+        conn.close()
 
 def save_ig_link_pages(data):
-    try:
-        with open(IG_LINK_PAGES_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"Error saving IG link pages: {e}")
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("INSERT OR REPLACE INTO ig_settings (key, value) VALUES ('link_pages', ?)", (json.dumps(data),))
+            conn.commit()
+        except Exception as e:
+            print(f"Error saving link pages: {e}")
+        finally:
+            conn.close()
 
 def load_ig_scheduled_posts():
-    if os.path.exists(IG_SCHEDULED_POSTS_FILE):
-        try:
-            with open(IG_SCHEDULED_POSTS_FILE, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, media_url, caption, scheduled_time, status, error FROM ig_scheduled_posts")
+        rows = cursor.fetchall()
+        return [{
+            "id": r["id"],
+            "media_url": r["media_url"],
+            "caption": r["caption"],
+            "scheduled_time": r["scheduled_time"],
+            "status": r["status"],
+            "error": r["error"]
+        } for r in rows]
+    except Exception as e:
+        print(f"Error loading scheduled posts: {e}")
+        return []
+    finally:
+        conn.close()
 
 def save_ig_scheduled_posts(data):
-    try:
-        with open(IG_SCHEDULED_POSTS_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"Error saving IG scheduled posts: {e}")
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM ig_scheduled_posts")
+            for post in data:
+                cursor.execute(
+                    "INSERT OR REPLACE INTO ig_scheduled_posts (id, media_url, caption, scheduled_time, status, error) VALUES (?, ?, ?, ?, ?, ?)",
+                    (post.get("id"), post.get("media_url"), post.get("caption"), post.get("scheduled_time"), post.get("status"), post.get("error"))
+                )
+            conn.commit()
+        except Exception as e:
+            print(f"Error saving scheduled posts: {e}")
+        finally:
+            conn.close()
 
 def load_ig_flows():
-    if os.path.exists(IG_FLOWS_FILE):
-        try:
-            with open(IG_FLOWS_FILE, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT flow_key, steps FROM ig_flows")
+        rows = cursor.fetchall()
+        flows = {}
+        for r in rows:
+            flows[r["flow_key"]] = json.loads(r["steps"])
+        return flows
+    except Exception as e:
+        print(f"Error loading flows: {e}")
+        return {}
+    finally:
+        conn.close()
 
 def save_ig_flows(data):
-    try:
-        with open(IG_FLOWS_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"Error saving IG flows: {e}")
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM ig_flows")
+            for k, v in data.items():
+                cursor.execute("INSERT OR REPLACE INTO ig_flows (flow_key, steps) VALUES (?, ?)", (k, json.dumps(v)))
+            conn.commit()
+        except Exception as e:
+            print(f"Error saving flows: {e}")
+        finally:
+            conn.close()
 
 
-
-IG_CONV_STATE_FILE = os.path.join(BASE_DIR, "ig_conv_state.json")
 
 def load_ig_conv_state():
-    if os.path.exists(IG_CONV_STATE_FILE):
-        try:
-            with open(IG_CONV_STATE_FILE, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id, step, answers, updatedAt FROM ig_conv_state")
+        rows = cursor.fetchall()
+        data = {}
+        now = int(time.time() * 1000)
+        one_day_ms = 24 * 60 * 60 * 1000
+        for r in rows:
+            uid = r["user_id"]
+            u_time = r["updatedAt"]
+            if u_time and now - u_time > one_day_ms:
+                with db_lock:
+                    conn2 = get_db_conn()
+                    try:
+                        cursor2 = conn2.cursor()
+                        cursor2.execute("DELETE FROM ig_conv_state WHERE user_id = ?", (uid,))
+                        conn2.commit()
+                    finally:
+                        conn2.close()
+            else:
+                data[uid] = {
+                    "step": r["step"],
+                    "answers": json.loads(r["answers"] or "{}"),
+                    "updatedAt": u_time
+                }
+        return data
+    except Exception as e:
+        print(f"Error loading conversation states: {e}")
+        return {}
+    finally:
+        conn.close()
 
 def save_ig_conv_state(data):
-    try:
-        with open(IG_CONV_STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"Error saving IG conversation state: {e}")
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM ig_conv_state")
+            for k, v in data.items():
+                cursor.execute(
+                    "INSERT OR REPLACE INTO ig_conv_state (user_id, step, answers, updatedAt) VALUES (?, ?, ?, ?)",
+                    (k, v.get("step"), json.dumps(v.get("answers") or {}), v.get("updatedAt") or int(time.time() * 1000))
+                )
+            conn.commit()
+        except Exception as e:
+            print(f"Error saving conversation states: {e}")
+        finally:
+            conn.close()
 
 def is_positive_reply(text):
     return text.lower().strip() in ("yes", "y", "yep", "yeah", "sure", "ok", "okay", "agree", "1")
@@ -780,8 +1349,8 @@ def fetch_ig_media(force=False):
     if not IG_USER_ID:
         raise Exception("IG_USER_ID is not configured")
         
-    tokens_to_try = [PAGE_ACCESS_TOKEN, "EAAOEye5xXB4BR9A8DuLQt4K2MqxaI37G0dqxxes8RTyXS5NwvXo9x97gjXHFwtR0u35HqDXXfooue4mZBcyCyToPnthEtAzTjmOKTZBZAeGLw5XZBDGfsPsAPYfYaZBGZCgbgRPs88ajq9qDUbOWmwJpSkphZClZAXuF6cj0KoB7NkD0xNEEpiqCEZCoBiiSBts3PMgZDZD", "EAAOEye5xXB4BRzz8MnN62XaqxROB40ES6qPY1PY0Vpf5jpZAjsCAu0ZCOs9cNQqRgZAp9NrKJp8bMtIOhe3bWPovQJFlwcYkDuLytihtDXKeqHQvoJQERMKQ5xPZCepNLve3G6jU1Dyb4rtZAPKv2MeqB2IqsEolCGe4tu9nYdC7ZB0nMLoOKZBvazjZCzDmS8ZBm6kIbE9ZBY"]
-    tokens_to_try = list(dict.fromkeys(t for t in tokens_to_try if t))
+    tokens_to_try = [PAGE_ACCESS_TOKEN]
+    tokens_to_try = [t for t in tokens_to_try if t]
     
     last_error = None
     for token in tokens_to_try:
@@ -1308,7 +1877,7 @@ def get_last_user_interaction_time(user_id):
     interactions = load_ig_user_interactions()
     return interactions.get(str(user_id))
 
-def queue_ig_message(recipient_id, text, comment_id=None, is_private_reply=False, automation_name=None, delay=0):
+def queue_ig_message(recipient_id, text, comment_id=None, is_private_reply=False, automation_name=None, delay=0, quick_replies=None):
     queue = load_ig_messages_queue()
     queue.append({
         "recipient_id": recipient_id,
@@ -1317,10 +1886,106 @@ def queue_ig_message(recipient_id, text, comment_id=None, is_private_reply=False
         "is_private_reply": is_private_reply,
         "automation_name": automation_name or "manual",
         "queued_at": time.time(),
-        "delay": delay
+        "delay": delay,
+        "quick_replies": quick_replies
     })
     save_ig_messages_queue(queue)
     print(f"[Queue] Queued message to {recipient_id}: {text[:30]}...", flush=True)
+
+def perform_ig_dm_send_with_buttons(user_id, text, quick_replies_list, tag=None) -> tuple[bool, str]:
+    if not IG_USER_ID:
+        return False, "IG_USER_ID not set"
+    try:
+        meta_replies = []
+        for r in quick_replies_list:
+            meta_replies.append({
+                "content_type": "text",
+                "title": r.get("title")[:20],
+                "payload": r.get("payload")
+            })
+        
+        json_payload = {
+            "recipient": {"id": user_id},
+            "message": {
+                "text": text,
+                "quick_replies": meta_replies
+            }
+        }
+        if tag:
+            json_payload["tag"] = tag
+            json_payload["messaging_type"] = "MESSAGE_TAG"
+            
+        resp = requests.post(
+            f"{GRAPH_URL}/{IG_USER_ID}/messages",
+            params={"access_token": PAGE_ACCESS_TOKEN},
+            json=json_payload,
+            timeout=8,
+        )
+        result = resp.json()
+        if "message_id" in result:
+            bump_ig_stat("dms_sent")
+            bump_daily_dm()
+            return True, ""
+        else:
+            return False, result.get("error", {}).get("message", str(result))
+    except Exception as e:
+        return False, str(e)
+
+def start_ig_flow(user_id, flow_key, username=""):
+    flows = load_ig_flows()
+    flow = flows.get(flow_key)
+    if not flow:
+        print(f"[Flow Error] Flow {flow_key} not found.")
+        return False
+    send_ig_flow_step(user_id, flow_key, "start", username)
+    return True
+
+def send_ig_flow_step(user_id, flow_key, step_id, username=""):
+    flows = load_ig_flows()
+    flow = flows.get(flow_key)
+    if not flow:
+        return
+    step = flow.get(step_id)
+    if not step:
+        return
+    
+    text = personalize_ig_message(step.get("text", ""), username)
+    replies = step.get("quick_replies", [])
+    meta_replies = []
+    for r in replies:
+        meta_replies.append({
+            "title": r.get("title"),
+            "payload": f"flow:{flow_key}:{r.get('next_step')}"
+        })
+        
+    if meta_replies:
+        queue_ig_message(
+            recipient_id=user_id,
+            text=text,
+            automation_name=f"flow:{flow_key}",
+            quick_replies=meta_replies
+        )
+    else:
+        queue_ig_message(
+            recipient_id=user_id,
+            text=text,
+            automation_name=f"flow:{flow_key}"
+        )
+        
+    if step.get("end"):
+        conv_state = load_ig_conv_state()
+        if str(user_id) in conv_state:
+            del conv_state[str(user_id)]
+        save_ig_conv_state(conv_state)
+    else:
+        conv_state = load_ig_conv_state()
+        conv_state[str(user_id)] = {
+            "step": f"flow_step:{step_id}",
+            "automation_name": f"flow:{flow_key}",
+            "flow_key": flow_key,
+            "updatedAt": int(time.time() * 1000)
+        }
+        save_ig_conv_state(conv_state)
 
 def perform_ig_private_reply_send(comment_id, message) -> tuple[bool, str]:
     if not IG_USER_ID:
@@ -1344,16 +2009,20 @@ def perform_ig_private_reply_send(comment_id, message) -> tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
-def perform_ig_dm_send(user_id, message) -> tuple[bool, str]:
+def perform_ig_dm_send(user_id, message, tag=None) -> tuple[bool, str]:
     if not IG_USER_ID:
         return False, "IG_USER_ID not set"
     if not daily_cap_ok():
         return False, "Daily DM cap reached"
     try:
+        json_payload = {"recipient": {"id": user_id}, "message": {"text": message}}
+        if tag:
+            json_payload["tag"] = tag
+            json_payload["messaging_type"] = "MESSAGE_TAG"
         resp = requests.post(
             f"{GRAPH_URL}/{IG_USER_ID}/messages",
             params={"access_token": PAGE_ACCESS_TOKEN},
-            json={"recipient": {"id": user_id}, "message": {"text": message}},
+            json=json_payload,
             timeout=8,
         )
         result = resp.json()
@@ -1440,23 +2109,44 @@ def ig_queue_worker():
                     save_ig_messages_log(logs)
                     continue
 
-            # Rule 4: 24-hour standard messaging window:
-            # For regular (non-private-reply) DMs, only allow free-form/promotional sends if the user messaged, commented, or story-replied within the last 24 hours.
+            # Rule 4: 24-hour standard messaging window + tags compliance
+            tag_to_use = None
             if not is_private_reply and recipient_id:
                 last_interaction_time = get_last_user_interaction_time(recipient_id)
-                if last_interaction_time is None or (time.time() - last_interaction_time > 86400):
-                    print(f"[IG Worker] 🚫 User {recipient_id} outside 24h messaging window. Skipping.", flush=True)
-                    queue.pop(0)
-                    save_ig_messages_queue(queue)
-                    logs.append({
-                        "recipient_id": recipient_id,
-                        "text": msg_task.get("text"),
-                        "status": "outside_messaging_window",
-                        "sent_at": time.time(),
-                        "is_automated": automation_name != "manual"
-                    })
-                    save_ig_messages_log(logs)
-                    continue
+                now = time.time()
+                is_outside_24h = last_interaction_time is None or (now - last_interaction_time > 86400)
+                
+                if is_outside_24h:
+                    if automation_name == "manual":
+                        if last_interaction_time is not None and (now - last_interaction_time <= 604800):
+                            tag_to_use = "HUMAN_AGENT"
+                            print(f"[IG Worker] User {recipient_id} outside 24h but inside 7-day manual window. Applying HUMAN_AGENT tag.", flush=True)
+                        else:
+                            print(f"[IG Worker] 🚫 User {recipient_id} outside 7-day manual window. Skipping manual reply.", flush=True)
+                            queue.pop(0)
+                            save_ig_messages_queue(queue)
+                            logs.append({
+                                "recipient_id": recipient_id,
+                                "text": msg_task.get("text"),
+                                "status": "outside_manual_7day_window",
+                                "sent_at": time.time(),
+                                "is_automated": False
+                            })
+                            save_ig_messages_log(logs)
+                            continue
+                    else:
+                        print(f"[IG Worker] 🚫 User {recipient_id} outside 24h automated window. Skipping automated reply.", flush=True)
+                        queue.pop(0)
+                        save_ig_messages_queue(queue)
+                        logs.append({
+                            "recipient_id": recipient_id,
+                            "text": msg_task.get("text"),
+                            "status": "outside_messaging_window",
+                            "sent_at": time.time(),
+                            "is_automated": True
+                        })
+                        save_ig_messages_log(logs)
+                        continue
 
             # Human-like delay: 1-4 seconds
             rand_delay = random.uniform(1.0, 4.0)
@@ -1472,8 +2162,10 @@ def ig_queue_worker():
             
             if is_private_reply and comment_id:
                 success, error_message = perform_ig_private_reply_send(comment_id, text)
+            elif msg_task.get("quick_replies"):
+                success, error_message = perform_ig_dm_send_with_buttons(recipient_id, text, msg_task["quick_replies"], tag=tag_to_use)
             else:
-                success, error_message = perform_ig_dm_send(recipient_id, text)
+                success, error_message = perform_ig_dm_send(recipient_id, text, tag=tag_to_use)
                 
             logs.append({
                 "recipient_id": recipient_id,
@@ -1608,6 +2300,10 @@ def run_ig_automations(trigger_type, text, media_id="", comment_id="", user_id="
         if action in ("comment", "both") and auto.get("reply") and comment_id:
             reply_to_ig_comment(comment_id, personalize_ig_message(auto["reply"], username))
 
+        if action == "flow" and auto.get("link_url") and user_id:
+            start_ig_flow(user_id, auto["link_url"], username)
+            return True
+
         if action in ("dm", "both") and auto.get("dm_message"):
             dm_body = build_ig_dm_body(auto, username)
             
@@ -1616,15 +2312,13 @@ def run_ig_automations(trigger_type, text, media_id="", comment_id="", user_id="
                     send_ig_private_reply(comment_id, dm_body, recipient_id=user_id, automation_name=auto.get("name"), delay=delay)
                 else:
                     send_ig_dm(user_id, dm_body, automation_name=auto.get("name"), delay=delay)
-                # Queue the email capture prompt to send 1s after the main message
                 send_ig_dm(user_id, auto["email_prompt"], automation_name=auto.get("name"), delay=delay + 1)
                 
-                # Transition state
                 conv_state = load_ig_conv_state()
                 conv_state[str(user_id)] = {
                     "step": "awaiting_email",
                     "automation_name": auto.get("name"),
-                    "updated_at": time.time()
+                    "updatedAt": int(time.time() * 1000)
                 }
                 save_ig_conv_state(conv_state)
                 
@@ -1633,15 +2327,16 @@ def run_ig_automations(trigger_type, text, media_id="", comment_id="", user_id="
                     send_ig_private_reply(comment_id, dm_body, recipient_id=user_id, automation_name=auto.get("name"), delay=delay)
                 else:
                     send_ig_dm(user_id, dm_body, automation_name=auto.get("name"), delay=delay)
-                # Queue follow up question to send 1s after the main message
-                send_ig_dm(user_id, auto["follow_up_message"], automation_name=auto.get("name"), delay=delay + 1)
                 
-                # Transition state
+                # Sequence drip campaign delay
+                f_delay = int(auto.get("follow_up_delay_seconds") or 3600)
+                send_ig_dm(user_id, auto["follow_up_message"], automation_name=auto.get("name"), delay=delay + f_delay)
+                
                 conv_state = load_ig_conv_state()
                 conv_state[str(user_id)] = {
                     "step": "awaiting_followup",
                     "automation_name": auto.get("name"),
-                    "updated_at": time.time()
+                    "updatedAt": int(time.time() * 1000)
                 }
                 save_ig_conv_state(conv_state)
             else:
@@ -1768,6 +2463,41 @@ def handle_ig_messaging(event):
 
     text = (message.get("text") or "").lower().strip()
     reply_to = message.get("reply_to") or {}
+
+    postback_payload = ""
+    if event.get("postback"):
+        postback_payload = event.get("postback", {}).get("payload", "")
+    elif message.get("quick_reply"):
+        postback_payload = message.get("quick_reply", {}).get("payload", "")
+
+    if postback_payload.startswith("flow:"):
+        parts = postback_payload.split(":")
+        if len(parts) >= 3:
+            flow_key = parts[1]
+            next_step = parts[2]
+            print(f"[Flow Route] Routing user {sender_id} in flow {flow_key} to step {next_step}", flush=True)
+            send_ig_flow_step(sender_id, flow_key, next_step)
+            return
+
+    # Identify story mention
+    is_story_mention = False
+    attachments = message.get("attachments", []) or []
+    for att in attachments:
+        if att.get("type") == "story_mention":
+            is_story_mention = True
+            break
+    if message.get("story_mention"):
+        is_story_mention = True
+
+    if is_story_mention:
+        print(f"[IG STORY MENTION] from={sender_id}", flush=True)
+        dedup_key = f"ig:story_mention:{sender_id}:{message.get('mid')}"
+        if ig_already_replied(dedup_key):
+            return
+        if run_ig_automations("story_mention", text, user_id=sender_id):
+            bump_ig_stat("story_replies")
+            ig_mark_replied(dedup_key)
+        return
 
     if reply_to.get("story"):
         print(f"[IG STORY REPLY] from={sender_id} text={text}", flush=True)
@@ -3090,17 +3820,14 @@ def ig_delete_keyword(keyword):
 
 @app.route("/instagram/ui/automations/<int:idx>/test", methods=["POST"])
 def ig_test_automation(idx):
-    """Send a test DM to the last active tester's IG account to preview the automation message."""
     autos = load_ig_automations()
     if not (0 <= idx < len(autos)):
         return jsonify({"ok": False, "error": "Automation not found"})
     if not IG_USER_ID:
-        return jsonify({"ok": False, "error": "IG_USER_ID not discovered yet — make sure your IG is linked to your Facebook Page"})
+        return jsonify({"ok": False, "error": "IG_USER_ID not discovered yet"})
     
     tester = load_last_tester()
-    print("[DEBUG TESTER] Loaded tester:", tester)
     if not tester or not tester.get("user_id"):
-        print("[DEBUG TESTER] No test user found, returning error JSON")
         return jsonify({
             "ok": False, 
             "error": "No test user found! Please send a comment, mention, or DM to your Instagram Business account from your personal Instagram account first to register your test ID, then click Test again."
@@ -3108,17 +3835,27 @@ def ig_test_automation(idx):
         
     target_id = tester["user_id"]
     target_name = tester.get("username") or "you"
-    
     auto    = autos[idx]
+    
+    # Check if the action is a flow
+    if auto.get("action") == "flow" and auto.get("link_url"):
+        success = start_ig_flow(target_id, auto["link_url"], target_name)
+        if success:
+            return jsonify({"ok": True, "message": f"Test Flow '{auto['link_url']}' started for @{target_name}"})
+        return jsonify({"ok": False, "error": f"Flow '{auto['link_url']}' could not be started."})
+        
     dm_body = build_ig_dm_body(auto, target_name)
     if not dm_body:
         dm_body = auto.get("reply", "Test automation message")
         
-    # Bypass daily cap for test — send directly
+    prepend_str = "[TEST]"
+    if auto.get("trigger_type") == "story_mention":
+        prepend_str = "[TEST STORY MENTION]"
+        
     resp = requests.post(
         f"{GRAPH_URL}/{IG_USER_ID}/messages",
         params={"access_token": PAGE_ACCESS_TOKEN},
-        json={"recipient": {"id": target_id}, "message": {"text": f"[TEST — {auto['name']}]\n\n{dm_body}"}},
+        json={"recipient": {"id": target_id}, "message": {"text": f"{prepend_str} — {auto['name']}\n\n{dm_body}"}},
         timeout=8,
     )
     result = resp.json()
@@ -3140,7 +3877,6 @@ def ig_get_stats():
     
     if IG_USER_ID:
         try:
-            # 1. Fetch user reach/impressions
             resp = requests.get(
                 f"{GRAPH_URL}/{IG_USER_ID}/insights",
                 params={
@@ -3162,7 +3898,6 @@ def ig_get_stats():
                         elif name == "impressions":
                             live_insights["impressions_day"] = val
                             
-            # 2. Fetch follower count
             profile_resp = requests.get(
                 f"{GRAPH_URL}/{IG_USER_ID}",
                 params={
@@ -3187,6 +3922,72 @@ def ig_get_stats():
     local_stats["total_failed_dms"] = sum(1 for log in logs if "failed" in str(log.get("status", "")))
     local_stats["total_skipped_dms"] = sum(1 for log in logs if log.get("status") in ("skipped_24h_limit", "outside_messaging_window"))
     
+    # 3. Dynamic SQLite Analytics
+    automation_stats = []
+    try:
+        rows = db_execute("""
+            SELECT automation_name, 
+                   COUNT(*) as total_triggered,
+                   SUM(CASE WHEN status='success' THEN 1 ELSE 0 end) as sent_count,
+                   SUM(CASE WHEN status='outside_messaging_window' OR status='outside_manual_7day_window' THEN 1 ELSE 0 end) as blocked_count
+            FROM ig_messages_log 
+            GROUP BY automation_name
+        """)
+        
+        # Load leads count per automation
+        lead_rows = db_execute("SELECT automation_name, COUNT(*) as lead_count FROM ig_leads GROUP BY automation_name")
+        leads_map = {r["automation_name"]: r["lead_count"] for r in lead_rows}
+        
+        for r in rows:
+            name = r["automation_name"] or "manual"
+            leads = leads_map.get(name, 0)
+            sent = r["sent_count"] or 0
+            automation_stats.append({
+                "automation_name": name,
+                "triggered": r["total_triggered"] or 0,
+                "sent": sent,
+                "blocked": r["blocked_count"] or 0,
+                "leads": leads,
+                "conversion_rate": round((leads / sent * 100.0), 1) if sent > 0 else 0.0
+            })
+    except Exception as stat_err:
+        print(f"[SQLite Stats Error] {stat_err}")
+
+    local_stats["automation_stats"] = automation_stats
+
+    # Lead conversion funnel summary
+    try:
+        total_leads = db_execute("SELECT COUNT(*) as cnt FROM ig_leads")[0]["cnt"]
+        total_dms = db_execute("SELECT COUNT(*) as cnt FROM ig_messages_log WHERE status='success'")[0]["cnt"]
+        local_stats["funnel"] = {
+            "total_dms_sent": total_dms,
+            "total_leads_captured": total_leads,
+            "conversion_funnel_percentage": round((total_leads / total_dms * 100.0), 1) if total_dms > 0 else 0.0
+        }
+    except Exception as funnel_err:
+        print(f"[Funnel Calculation Error] {funnel_err}")
+        local_stats["funnel"] = {"total_dms_sent": 0, "total_leads_captured": 0, "conversion_funnel_percentage": 0.0}
+
+    # Trend chart (last 7 days of successful sends)
+    trend_data = []
+    try:
+        trend_rows = db_execute("""
+            SELECT strftime('%Y-%m-%d', datetime(sent_at, 'unixepoch')) as day, COUNT(*) as count 
+            FROM ig_messages_log 
+            WHERE status='success' 
+            GROUP BY day 
+            ORDER BY day DESC 
+            LIMIT 7
+        """)
+        for tr in trend_rows:
+            trend_data.append({
+                "date": tr["day"],
+                "count": tr["count"]
+            })
+    except Exception as trend_err:
+        print(f"[SQLite Trend Error] {trend_err}")
+    local_stats["trend_last_7_days"] = trend_data
+
     # Calculate top posts by engagement
     top_posts = []
     try:
@@ -3247,6 +4048,53 @@ def ig_settings_route():
     settings["spam_keywords"]   = settings.get("spam_keywords", "")
     settings["crm_webhook_url"] = settings.get("crm_webhook_url", "")
     return jsonify(settings)
+
+
+# ── Flows endpoints ──
+@app.route("/instagram/ui/flows", methods=["GET"])
+def get_flows():
+    return jsonify(load_ig_flows())
+
+@app.route("/instagram/ui/flows", methods=["POST"])
+def create_flow():
+    data = request.json or {}
+    flow_key = data.get("flow_key")
+    steps = data.get("steps")
+    if not flow_key or not steps:
+        return jsonify({"success": False, "error": "flow_key and steps are required"}), 400
+    
+    flows = load_ig_flows()
+    flows[flow_key] = steps
+    save_ig_flows(flows)
+    return jsonify({"success": True})
+
+@app.route("/instagram/ui/flows/<flow_key>", methods=["DELETE"])
+def delete_flow(flow_key):
+    flows = load_ig_flows()
+    if flow_key in flows:
+        del flows[flow_key]
+        save_ig_flows(flows)
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Flow not found"}), 404
+
+# ── Broadcast route ──
+@app.route("/instagram/ui/broadcast", methods=["POST"])
+def instagram_broadcast():
+    data = request.json or {}
+    text = data.get("text")
+    if not text:
+        return jsonify({"success": False, "error": "Message text is required"}), 400
+    
+    twenty_four_hours_ago = time.time() - 86400
+    rows = db_execute("SELECT user_id FROM ig_user_interactions WHERE last_interaction >= ?", (twenty_four_hours_ago,))
+    
+    count = 0
+    for r in rows:
+        uid = r["user_id"]
+        queue_ig_message(recipient_id=uid, text=text, automation_name="broadcast")
+        count += 1
+        
+    return jsonify({"success": True, "queued_count": count})
 
 
 # ── Comment Moderation endpoints ──
@@ -3837,24 +4685,11 @@ def initialize_token():
         if resp.status_code == 200 and "error" not in resp.json():
             print("[Token Initialization] Token is valid.")
             return
+        else:
+            err_msg = resp.json().get("error", {}).get("message", "Unknown error")
+            raise RuntimeError(err_msg)
     except Exception as check_err:
-        print(f"[Token Check Error] {check_err}")
-
-    print("[Token Initialization] Token is invalid. Finding working fallback token...")
-    fallbacks = [
-        "EAAOEye5xXB4BR9A8DuLQt4K2MqxaI37G0dqxxes8RTyXS5NwvXo9x97gjXHFwtR0u35HqDXXfooue4mZBcyCyToPnthEtAzTjmOKTZBZAeGLw5XZBDGfsPsAPYfYaZBGZCgbgRPs88ajq9qDUbOWmwJpSkphZClZAXuF6cj0KoB7NkD0xNEEpiqCEZCoBiiSBts3PMgZDZD",
-        "EAAOEye5xXB4BRzz8MnN62XaqxROB40ES6qPY1PY0Vpf5jpZAjsCAu0ZCOs9cNQqRgZAp9NrKJp8bMtIOhe3bWPovQJFlwcYkDuLytihtDXKeqHQvoJQERMKQ5xPZCepNLve3G6jU1Dyb4rtZAPKv2MeqB2IqsEolCGe4tu9nYdC7ZB0nMLoOKZBvazjZCzDmS8ZBm6kIbE9ZBY"
-    ]
-    for fb in fallbacks:
-        try:
-            r = requests.get(f"https://graph.facebook.com/v19.0/{PAGE_ID}", params={"access_token": fb}, timeout=8)
-            if r.status_code == 200 and "error" not in r.json():
-                PAGE_ACCESS_TOKEN = fb
-                print(f"[Token Initialization] Recovered using fallback token: {fb[:15]}...")
-                return
-        except Exception:
-            continue
-    print("[Token Initialization] WARNING: No working fallback tokens found!")
+        raise RuntimeError(f"Token validation failed: {check_err}")
 
 try:
     initialize_token()
@@ -3864,13 +4699,161 @@ try:
 except Exception as e:
     print(f"[Subscribe error] {e}")
 
+
+def check_token_health():
+    if not IG_APP_ID or not IG_APP_SECRET or not PAGE_ACCESS_TOKEN:
+        print("[Token Health] Missing credentials to check token health.")
+        return
+    
+    print("[Token Health] Checking token health...", flush=True)
+    try:
+        app_token = f"{IG_APP_ID}|{IG_APP_SECRET}"
+        resp = requests.get(
+            "https://graph.facebook.com/debug_token",
+            params={
+                "input_token": PAGE_ACCESS_TOKEN,
+                "access_token": app_token
+            },
+            timeout=10
+        )
+        data = resp.json()
+        if resp.status_code == 200 and "data" in data:
+            token_info = data["data"]
+            is_valid = token_info.get("is_valid", False)
+            expires_at = token_info.get("expires_at", 0)
+            scopes = token_info.get("scopes", [])
+            
+            status_str = "valid" if is_valid else "invalid"
+            
+            with db_lock:
+                conn = get_db_conn()
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "INSERT OR REPLACE INTO ig_token_health (key, status, expires_at, last_check, scopes, error) VALUES ('main', ?, ?, ?, ?, NULL)",
+                        (status_str, expires_at, time.time(), json.dumps(scopes))
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+            print(f"[Token Health] Token is {status_str}. Expires at: {expires_at}", flush=True)
+        else:
+            err = data.get("error", {}).get("message", str(data))
+            _save_token_error(err)
+    except Exception as e:
+        _save_token_error(str(e))
+
+def _save_token_error(err_str):
+    print(f"[Token Health Error] {err_str}", flush=True)
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT OR REPLACE INTO ig_token_health (key, status, expires_at, last_check, scopes, error) VALUES ('main', 'error', 0, ?, '[]', ?)",
+                (time.time(), err_str)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+def ig_token_health_worker():
+    print("[Token Health Worker] Started background token health daemon.", flush=True)
+    while True:
+        try:
+            check_token_health()
+        except Exception as e:
+            print(f"[Token Health Worker Error] {e}")
+        time.sleep(21600)
+
+# ── Unified Inbox endpoints ──
+@app.route("/instagram/ui/inbox/threads", methods=["GET"])
+def get_ig_threads():
+    if not IG_USER_ID:
+        return jsonify({"error": "IG_USER_ID is not configured"}), 400
+    try:
+        resp = requests.get(
+            f"{GRAPH_URL}/{IG_USER_ID}/conversations",
+            params={
+                "fields": "id,participants,updated_time,unread_count,messages.limit(1){message,from,created_time}",
+                "access_token": PAGE_ACCESS_TOKEN
+            },
+            timeout=12
+        )
+        if resp.status_code != 200:
+            return jsonify({"error": resp.json().get("error", {}).get("message", "API Error")}), resp.status_code
+        
+        data = resp.json().get("data", [])
+        threads = []
+        for item in data:
+            participants = item.get("participants", {}).get("data", [])
+            user = None
+            for p in participants:
+                if str(p.get("id")) != str(IG_USER_ID):
+                    user = p
+                    break
+            if not user:
+                if participants:
+                    user = participants[0]
+                else:
+                    user = {"id": "unknown", "username": "Instagram User"}
+                    
+            last_msg = ""
+            msgs = item.get("messages", {}).get("data", [])
+            if msgs:
+                last_msg = msgs[0].get("message", "")
+                
+            threads.append({
+                "thread_id": item.get("id"),
+                "user_id": user.get("id"),
+                "username": user.get("username", "User"),
+                "updated_time": item.get("updated_time"),
+                "unread_count": item.get("unread_count", 0),
+                "last_message": last_msg
+            })
+        return jsonify(threads)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/instagram/ui/inbox/reply", methods=["POST"])
+def send_manual_inbox_reply():
+    data = request.json or {}
+    user_id = data.get("user_id")
+    text = data.get("text")
+    if not user_id or not text:
+        return jsonify({"error": "user_id and text are required"}), 400
+    
+    queue_ig_message(recipient_id=user_id, text=text, automation_name="manual")
+    return jsonify({"success": True, "message": "Reply queued for sending."})
+
+
+@app.route("/instagram/ui/token-health", methods=["GET"])
+def get_token_health():
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT status, expires_at, last_check, scopes, error FROM ig_token_health WHERE key = 'main'")
+        row = cursor.fetchone()
+        if row:
+            return jsonify({
+                "status": row["status"],
+                "expires_at": row["expires_at"],
+                "last_check": row["last_check"],
+                "scopes": json.loads(row["scopes"] or "[]"),
+                "error": row["error"]
+            })
+        return jsonify({"status": "unknown", "message": "No health check performed yet."})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
-    # Start background queue worker
     import threading
     threading.Thread(target=ig_queue_worker, daemon=True).start()
-    # Start background scheduler worker
     threading.Thread(target=ig_scheduler_worker, daemon=True).start()
+    threading.Thread(target=ig_token_health_worker, daemon=True).start()
     
-    # Dynamically bind port to the environment variable FLASK_PORT
     port = int(os.environ.get("FLASK_PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
