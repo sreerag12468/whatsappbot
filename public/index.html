@@ -330,312 +330,243 @@
             <iframe id="fb-iframe" src="about:blank" data-src="/fb/" title="Facebook & Instagram Auto-Reply Bot" onload="onFBIframeLoad()" allow="clipboard-write"></iframe>
         </div>
     </div>
-
     <div id="tab-insta" class="tab-panel">
-        <div class="superprofile-wrapper" style="display: flex; gap: 24px; min-height: 85vh; width: 100%;">
-            <!-- Left Sidebar: SuperProfile Navigation Clone -->
-            <div class="sp-sidebar" style="width: 240px; background: rgba(15, 23, 42, 0.4); border: 1px solid var(--border-glass); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; justify-content: space-between; flex-shrink: 0; user-select: none;">
-                <div style="display: flex; flex-direction: column; gap: 28px;">
-                    <!-- Brand Logo -->
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 24px; color: #3b82f6; text-shadow: 0 0 10px rgba(59, 130, 246, 0.4)">⚡</span>
-                        <span style="font-size: 19px; font-weight: 800; background: linear-gradient(90deg, #fff, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: 0.5px; font-family: 'Outfit', sans-serif;">SuperProfile</span>
+        <!-- Right Main Content Panel (Simplified layout taking full width) -->
+        <div class="sp-main" style="display: flex; flex-direction: column; gap: 20px; min-width: 0; width: 100%;">
+            
+            <!-- Header area -->
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1 style="font-size: 24px; font-weight: 700; font-family: 'Outfit', sans-serif;">AutoDM</h1>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-top: 2px;">Manage automated direct message replies to comments, mentions, and stories.</p>
+                </div>
+                <button class="btn" style="background: #3b82f6; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.35); padding: 10px 20px; border-radius: 10px; font-size: 14px; font-weight: 600;" onclick="openCreateIgRuleModal()">+ Create Automation</button>
+            </div>
+
+            <!-- Custom tabs section: Automations, Settings, Link-in-Bio, Comments, Post Scheduler -->
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-glass); padding-bottom: 4px;">
+                <div style="display: flex; gap: 12px; overflow-x: auto;">
+                    <button id="sp-tab-rules-btn" class="sp-tab-btn active" onclick="switchSpSubTab('rules')">Automations</button>
+                    <button id="sp-tab-settings-btn" class="sp-tab-btn" onclick="switchSpSubTab('settings')">Settings</button>
+                    <button id="sp-tab-bio-btn" class="sp-tab-btn" onclick="switchSpSubTab('bio')">Link-in-Bio Setup</button>
+                    <button id="sp-tab-comments-btn" class="sp-tab-btn" onclick="switchSpSubTab('comments')">Comments Moderation</button>
+                    <button id="sp-tab-scheduler-btn" class="sp-tab-btn" onclick="switchSpSubTab('scheduler')">Post Scheduler</button>
+                </div>
+                <a href="#" style="font-size: 13px; color: var(--text-secondary); text-decoration: none; display: flex; align-items: center; gap: 6px;" onclick="alert('Support is simulated!')">🎧 Support</a>
+            </div>
+
+            <!-- Subpanel: Automations list & Metrics -->
+            <div id="sp-panel-rules" class="sp-subpanel active" style="display: flex; flex-direction: column; gap: 20px;">
+                <!-- Metrics Cards Grid -->
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%;">
+                    <div class="card" style="margin: 0; padding: 20px; display: flex; flex-direction: column; gap: 8px; background: rgba(15, 23, 42, 0.3); border: 1px solid var(--border-glass); position: relative;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 11.5px; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; letter-spacing: 0.05em;">✉️ DMs Sent</span>
+                        </div>
+                        <div id="stat-sp-dms" style="font-size: 28px; font-weight: 800; color: #3b82f6;">78.32K</div>
+                        <div style="height: 35px; width: 100%; opacity: 0.65; display: flex; align-items: flex-end; gap: 3px;">
+                            <div style="flex:1; height: 10px; background: #3b82f6; border-radius: 2px;"></div>
+                            <div style="flex:1; height: 18px; background: #3b82f6; border-radius: 2px;"></div>
+                            <div style="flex:1; height: 12px; background: #3b82f6; border-radius: 2px;"></div>
+                            <div style="flex:1; height: 15px; background: #3b82f6; border-radius: 2px;"></div>
+                            <div style="flex:1; height: 22px; background: #3b82f6; border-radius: 2px;"></div>
+                            <div style="flex:1; height: 28px; background: #3b82f6; border-radius: 2px;"></div>
+                            <div style="flex:1; height: 20px; background: #3b82f6; border-radius: 2px;"></div>
+                        </div>
                     </div>
 
-                    <!-- Menu Links -->
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 8px; font-weight: 700; opacity: 0.6;">Navigation</div>
-                        <a href="#" class="sp-nav-item" onclick="alert('Navigating to Home!')"><span class="icon">🏠</span> Home</a>
-                        <a href="#" class="sp-nav-item" onclick="alert('Navigating to Store!')"><span class="icon">🏪</span> Store</a>
-                        <a href="#" class="sp-nav-item" onclick="alert('Navigating to Payments!')"><span class="icon">💳</span> Payments</a>
-                        <a href="#" class="sp-nav-item" onclick="alert('Navigating to Learn!')"><span class="icon">🎓</span> Learn</a>
-                        <a href="#" class="sp-nav-item" onclick="alert('Navigating to Audience!')"><span class="icon">👥</span> Audience</a>
-                        <a href="#" class="sp-nav-item" onclick="alert('Navigating to Refer &amp; Earn!')"><span class="icon">💸</span> Refer &amp; Earn</a>
-                        
-                        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-top: 16px; margin-bottom: 8px; font-weight: 700; opacity: 0.6;">Your Apps</div>
-                        <a href="#" class="sp-nav-item active"><span class="icon">📸</span> AutoDM</a>
-                        <a href="#" class="sp-nav-item" onclick="alert('Navigating to SuperLinks!')"><span class="icon">🔗</span> SuperLinks</a>
-                        <a href="#" class="sp-nav-item" onclick="alert('Navigating to Lead Magnet!')"><span class="icon">🧲</span> Lead Magnet</a>
+                    <div class="card" style="margin: 0; padding: 20px; display: flex; flex-direction: column; gap: 8px; background: rgba(15, 23, 42, 0.3); border: 1px solid var(--border-glass); position: relative;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 11.5px; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; letter-spacing: 0.05em;">✉️ Emails Collected</span>
+                        </div>
+                        <div id="stat-sp-emails" style="font-size: 28px; font-weight: 800; color: #10b981;">0</div>
+                        <div style="height: 35px; width: 100%; opacity: 0.65; display: flex; align-items: flex-end; gap: 3px;">
+                            <div style="flex:1; height: 2px; background: #10b981; border-radius: 2px; width: 100%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="margin: 0; padding: 20px; display: flex; flex-direction: column; gap: 8px; background: rgba(15, 23, 42, 0.3); border: 1px solid var(--border-glass); position: relative;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 11.5px; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; letter-spacing: 0.05em;">👤 Followers Gained</span>
+                        </div>
+                        <div id="stat-sp-followers" style="font-size: 28px; font-weight: 800; color: #8b5cf6;">42.51K</div>
+                        <div style="height: 35px; width: 100%; opacity: 0.65; display: flex; align-items: flex-end; gap: 3px;">
+                            <div style="flex:1; height: 8px; background: #8b5cf6; border-radius: 2px;"></div>
+                            <div style="flex:1; height: 12px; background: #8b5cf6; border-radius: 2px;"></div>
+                            <div style="flex:1; height: 14px; background: #8b5cf6; border-radius: 2px;"></div>
+                            <div style="flex:1; height: 18px; background: #8b5cf6; border-radius: 2px;"></div>
+                            <div style="flex:1; height: 25px; background: #8b5cf6; border-radius: 2px;"></div>
+                            <div style="flex:1; height: 28px; background: #8b5cf6; border-radius: 2px;"></div>
+                            <div style="flex:1; height: 24px; background: #8b5cf6; border-radius: 2px;"></div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Sidebar Footer Info -->
-                <div style="display: flex; flex-direction: column; gap: 16px;">
-                    <!-- Free Plan Status -->
-                    <div style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(59, 130, 246, 0.08)); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 12px; padding: 14px; text-align: center;">
-                        <div style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 500;">You're on Free Plan</div>
-                        <button class="btn" style="width: 100%; padding: 6px 12px; font-size: 11.5px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); border: none; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);" onclick="alert('Upgrade feature is simulated!')">Explore Now 🚀</button>
+                <!-- Search, filter and actions bar -->
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; background: rgba(15, 23, 42, 0.2); border: 1px solid var(--border-glass); border-radius: 12px; padding: 10px 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+                        <span>🔍</span>
+                        <input type="text" id="sp-rules-search" class="form-input" placeholder="Search automations..." style="background: transparent; border: none; padding: 4px; font-size: 13.5px; box-shadow: none; max-width: 300px;" oninput="filterSpRulesTable()">
                     </div>
-                    
-                    <!-- User Info -->
-                    <div style="display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border-glass); padding-top: 12px;">
-                        <div style="width: 32px; height: 32px; border-radius: 50%; background: #3b82f6; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; font-size: 13px;">R</div>
-                        <div>
-                            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">radikikk</div>
-                            <div style="font-size: 10px; color: var(--text-secondary);">radikikk.shop</div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn" style="padding: 6px 12px; font-size: 12.5px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass);" onclick="sortSpRulesTable()">⇅ Sort</button>
+                        <button class="btn" style="padding: 6px 12px; font-size: 12.5px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass);" onclick="alert('Filtering active automations!')">⚙️ Filter</button>
+                        <button class="btn btn-danger" style="padding: 6px 12px; font-size: 12.5px; margin-right: 4px;" onclick="resetIgStats()">🔄 Reset Stats</button>
+                        <a href="/fb/instagram/ui/leads/export" class="btn" style="padding: 6px 12px; font-size: 12.5px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">📥 Export Leads</a>
+                    </div>
+                </div>
+
+                <!-- Automations list structured as a premium table -->
+                <div style="background: rgba(15, 23, 42, 0.2); border: 1px solid var(--border-glass); border-radius: 12px; overflow: hidden;">
+                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border-glass); padding: 12px 18px; font-size: 11.5px; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; letter-spacing: 0.05em;">
+                        <div>Automations</div>
+                        <div style="text-align: center;">Followers Gained</div>
+                        <div style="text-align: center;">Runs</div>
+                        <div style="text-align: center;">Button Clicks</div>
+                        <div style="text-align: right;">Status</div>
+                    </div>
+                    <div id="sp-rules-tbody" style="display: flex; flex-direction: column;">
+                        <!-- Rows populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subpanel: Settings -->
+            <div id="sp-panel-settings" class="sp-subpanel" style="display: none; flex-direction: column; gap: 20px;">
+                <div style="font-weight: 700; font-size: 16px; border-bottom: 1px solid var(--border-glass); padding-bottom: 8px;">Spam Moderation &amp; Webhooks</div>
+                
+                <div id="ig-status-banner" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 600; font-size: 14px;">Business Status Check:</span>
+                        <span id="ig-status-badge" style="font-size: 11px; font-weight: 700; color: #e11d48; text-transform: uppercase; background: rgba(225,29,72,0.1); padding: 2px 8px; border-radius: 20px;">Checking...</span>
+                    </div>
+                    <p id="ig-status-msg" style="color: var(--text-secondary); font-size: 12.5px; line-height: 1.5;">Verifying connection status with Meta API...</p>
+                    <button class="btn" style="align-self: flex-start; padding: 6px 12px; font-size: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass);" onclick="checkIgStatus()">Re-verify Account Status</button>
+                </div>
+
+                <div class="form-group">
+                    <label>Spam Keyword Blocklist (Auto-Hide Comments)</label>
+                    <textarea id="spam-keywords-input" class="form-input" style="height: 70px;" placeholder="e.g. promo, spam, scam, click here (comma separated)"></textarea>
+                    <span style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Comments containing any of these keywords will be automatically hidden via Graph API.</span>
+                </div>
+
+                <div class="form-group">
+                    <label>CRM Webhook Sync URL</label>
+                    <input type="text" id="crm-webhook-input" class="form-input" placeholder="e.g. https://make.com/webhook/123">
+                    <span style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Incoming leads (captured email, username) will be pushed here via webhook POST.</span>
+                </div>
+
+                <button class="btn" style="align-self: flex-start; background: #3b82f6;" onclick="saveIgSettingsFront()">Save Settings</button>
+            </div>
+
+            <!-- Subpanel: Bio Setup -->
+            <div id="sp-panel-bio" class="sp-subpanel" style="display: none;">
+                <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 24px; width: 100%;">
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div style="font-weight: 700; font-size: 16px; border-bottom: 1px solid var(--border-glass); padding-bottom: 8px;">Link-in-Bio Customization</div>
+                        
+                        <div class="form-group">
+                            <label>Profile Username</label>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input type="text" id="insta-username" class="form-input" placeholder="e.g. mallufyed_official" onkeypress="if(event.key === 'Enter') saveInstaUsername()">
+                                <button class="btn" style="padding: 10px 16px;" onclick="saveInstaUsername()">Save</button>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Page Title</label>
+                            <input type="text" id="bio-title-input" class="form-input" placeholder="My Creator Page">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Biography</label>
+                            <textarea id="bio-desc-input" class="form-input" style="height: 60px;" placeholder="Creator bio..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Theme &amp; Style</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <div>
+                                    <span style="font-size: 11px; color: var(--text-secondary)">Btn BG Color</span>
+                                    <input type="color" id="bio-btn-color" class="form-input" value="#db2777" style="height: 38px; padding: 2px;">
+                                </div>
+                                <div>
+                                    <span style="font-size: 11px; color: var(--text-secondary)">Btn Text Color</span>
+                                    <input type="color" id="bio-text-color" class="form-input" value="#ffffff" style="height: 38px; padding: 2px;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="flex-direction:row;align-items:center;gap:8px;user-select:none;cursor:pointer">
+                            <input type="checkbox" id="bio-show-feed" checked style="cursor:pointer">
+                            <label for="bio-show-feed" style="cursor:pointer;font-size:13px;color:var(--text-secondary)">Embed live Instagram media grid?</label>
+                        </div>
+
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn" style="flex: 1; background: #3b82f6;" onclick="saveBioPageSettings()">Publish Page</button>
+                            <a id="insta-live-link" href="#" target="_blank" class="btn" style="padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); display: none; text-decoration: none;">View Live Page ↗</a>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div style="font-weight: 700; font-size: 14px; color: var(--text-secondary);">Live Storefront Preview</div>
+                        <div id="insta-iframe-container" style="flex: 1; border-radius: 16px; overflow: hidden; background: rgba(0,0,0,0.25); border: 1px dashed var(--border-glass); display: flex; align-items: center; justify-content: center; position: relative; min-height: 420px;">
+                            <div id="insta-setup-prompt" style="text-align: center; padding: 20px;">
+                                <div style="font-size: 32px; margin-bottom: 8px;">🔗</div>
+                                <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Live Preview</h4>
+                                <p style="color: var(--text-secondary); font-size: 12px; line-height: 1.4;">Enter a username to load the live custom bio site preview.</p>
+                            </div>
+                            <iframe id="insta-iframe" src="about:blank" style="display: none; width: 100%; height: 100%; border: none;"></iframe>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Right Main Content Panel -->
-            <div class="sp-main" style="flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0;">
+            <!-- Subpanel: Comments -->
+            <div id="sp-panel-comments" class="sp-subpanel" style="display: none; flex-direction: column; gap: 16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;width:100%; border-bottom: 1px solid var(--border-glass); padding-bottom: 8px;">
+                    <div style="font-weight: 700; font-size: 16px;">Recent Media Comments</div>
+                    <button class="btn" style="padding: 6px 12px; font-size: 12.5px; background:rgba(255,255,255,0.05); border:1px solid var(--border-glass);" onclick="loadIgComments()">🔄 Refresh</button>
+                </div>
+                <div id="ig-comments-list" class="kw-list" style="max-height: 480px; overflow-y: auto;">
+                    <!-- Populate dynamically -->
+                </div>
+            </div>
+
+            <!-- Subpanel: Post Scheduler -->
+            <div id="sp-panel-scheduler" class="sp-subpanel" style="display: none; flex-direction: column; gap: 16px;">
+                <div style="font-weight: 700; font-size: 16px; border-bottom: 1px solid var(--border-glass); padding-bottom: 8px;">Schedule New Reels &amp; Posts</div>
                 
-                <!-- Header area -->
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; width: 100%;">
+                    <div style="display:flex; flex-direction:column; gap:16px;">
+                        <div class="form-group">
+                            <label>Media File URL (Direct link to Image/Video)</label>
+                            <input type="text" id="sched-media-url" class="form-input" placeholder="e.g. https://example.com/assets/banner.jpg">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Caption Text</label>
+                            <textarea id="sched-caption" class="form-input" style="height: 80px;" placeholder="Write an engaging caption..."></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Publishing Date &amp; Time</label>
+                            <input type="datetime-local" id="sched-datetime" class="form-input">
+                        </div>
+
+                        <button class="btn" style="align-self: flex-start; background: #3b82f6;" onclick="schedulePost()">Schedule Post</button>
+                    </div>
+                    
                     <div>
-                        <h1 style="font-size: 24px; font-weight: 700; font-family: 'Outfit', sans-serif;">AutoDM</h1>
-                        <p style="font-size: 13px; color: var(--text-secondary); margin-top: 2px;">Manage automated direct message replies to comments, mentions, and stories.</p>
-                    </div>
-                    <button class="btn" style="background: #3b82f6; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.35); padding: 10px 20px; border-radius: 10px; font-size: 14px; font-weight: 600;" onclick="openCreateIgRuleModal()">+ Create Automation</button>
-                </div>
-
-                <!-- Banner: Loving AutoDM? -->
-                <div class="sp-banner" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.6), rgba(30, 41, 59, 0.6)); border: 1px solid var(--border-glass); border-radius: 16px; padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; position: relative; overflow: hidden;">
-                    <div style="display: flex; flex-direction: column; gap: 4px; max-width: 70%; z-index: 1;">
-                        <h4 style="font-size: 15px; font-weight: 700; color: #fff;">Loving AutoDM? Invite friends &amp; followers and start earning</h4>
-                        <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.4;">Make a video and get your friends &amp; followers to use SuperProfile to unlock 20% recurring revenue forever for every successful referral.</p>
-                        <div style="display: flex; gap: 8px; margin-top: 10px;">
-                            <button class="btn" style="background: rgba(255,255,255,0.06); border: 1px solid var(--border-glass); padding: 6px 12px; font-size: 12px;" onclick="this.parentElement.parentElement.parentElement.style.display='none'">Dismiss</button>
-                            <button class="btn" style="background: #3b82f6; padding: 6px 12px; font-size: 12px;" onclick="window.open('https://superprofile.bio', '_blank')">Learn more ➔</button>
-                        </div>
-                    </div>
-                    <!-- Earnings info on right -->
-                    <div style="text-align: right; z-index: 1;">
-                        <div style="font-size: 32px; font-weight: 800; color: #10b981;">₹46,018+</div>
-                        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">Referral Payouts made this month</div>
-                    </div>
-                    <!-- Background glow -->
-                    <div style="position: absolute; right: -50px; top: -50px; width: 150px; height: 150px; background: rgba(59, 130, 246, 0.15); filter: blur(50px); border-radius: 50%;"></div>
-                </div>
-
-                <!-- Custom tabs section: Automations, Settings, Link-in-Bio, Comments, Post Scheduler -->
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-glass); padding-bottom: 4px;">
-                    <div style="display: flex; gap: 12px; overflow-x: auto;">
-                        <button id="sp-tab-rules-btn" class="sp-tab-btn active" onclick="switchSpSubTab('rules')">Automations</button>
-                        <button id="sp-tab-settings-btn" class="sp-tab-btn" onclick="switchSpSubTab('settings')">Settings</button>
-                        <button id="sp-tab-bio-btn" class="sp-tab-btn" onclick="switchSpSubTab('bio')">Link-in-Bio Setup</button>
-                        <button id="sp-tab-comments-btn" class="sp-tab-btn" onclick="switchSpSubTab('comments')">Comments Moderation</button>
-                        <button id="sp-tab-scheduler-btn" class="sp-tab-btn" onclick="switchSpSubTab('scheduler')">Post Scheduler</button>
-                    </div>
-                    <a href="#" style="font-size: 13px; color: var(--text-secondary); text-decoration: none; display: flex; align-items: center; gap: 6px;" onclick="alert('Support is simulated!')">🎧 Support</a>
-                </div>
-
-                <!-- Subpanel: Automations list & Metrics -->
-                <div id="sp-panel-rules" class="sp-subpanel active" style="display: flex; flex-direction: column; gap: 20px;">
-                    <!-- Metrics Cards Grid -->
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%;">
-                        <div class="card" style="margin: 0; padding: 20px; display: flex; flex-direction: column; gap: 8px; background: rgba(15, 23, 42, 0.3); border: 1px solid var(--border-glass); position: relative;">
-                            <div style="display: flex; align-items: center; justify-content: space-between;">
-                                <span style="font-size: 11.5px; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; letter-spacing: 0.05em;">✉️ DMs Sent</span>
-                            </div>
-                            <div id="stat-sp-dms" style="font-size: 28px; font-weight: 800; color: #3b82f6;">78.32K</div>
-                            <div style="height: 35px; width: 100%; opacity: 0.65; display: flex; align-items: flex-end; gap: 3px;">
-                                <!-- Sparkline divs simulating a chart -->
-                                <div style="flex:1; height: 10px; background: #3b82f6; border-radius: 2px;"></div>
-                                <div style="flex:1; height: 18px; background: #3b82f6; border-radius: 2px;"></div>
-                                <div style="flex:1; height: 12px; background: #3b82f6; border-radius: 2px;"></div>
-                                <div style="flex:1; height: 15px; background: #3b82f6; border-radius: 2px;"></div>
-                                <div style="flex:1; height: 22px; background: #3b82f6; border-radius: 2px;"></div>
-                                <div style="flex:1; height: 28px; background: #3b82f6; border-radius: 2px;"></div>
-                                <div style="flex:1; height: 20px; background: #3b82f6; border-radius: 2px;"></div>
-                            </div>
-                        </div>
-
-                        <div class="card" style="margin: 0; padding: 20px; display: flex; flex-direction: column; gap: 8px; background: rgba(15, 23, 42, 0.3); border: 1px solid var(--border-glass); position: relative;">
-                            <div style="display: flex; align-items: center; justify-content: space-between;">
-                                <span style="font-size: 11.5px; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; letter-spacing: 0.05em;">✉️ Emails Collected</span>
-                            </div>
-                            <div id="stat-sp-emails" style="font-size: 28px; font-weight: 800; color: #10b981;">0</div>
-                            <div style="height: 35px; width: 100%; opacity: 0.65; display: flex; align-items: flex-end; gap: 3px;">
-                                <div style="flex:1; height: 2px; background: #10b981; border-radius: 2px; width: 100%;"></div>
-                            </div>
-                        </div>
-
-                        <div class="card" style="margin: 0; padding: 20px; display: flex; flex-direction: column; gap: 8px; background: rgba(15, 23, 42, 0.3); border: 1px solid var(--border-glass); position: relative;">
-                            <div style="display: flex; align-items: center; justify-content: space-between;">
-                                <span style="font-size: 11.5px; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; letter-spacing: 0.05em;">👤 Followers Gained</span>
-                            </div>
-                            <div id="stat-sp-followers" style="font-size: 28px; font-weight: 800; color: #8b5cf6;">42.51K</div>
-                            <div style="height: 35px; width: 100%; opacity: 0.65; display: flex; align-items: flex-end; gap: 3px;">
-                                <div style="flex:1; height: 8px; background: #8b5cf6; border-radius: 2px;"></div>
-                                <div style="flex:1; height: 12px; background: #8b5cf6; border-radius: 2px;"></div>
-                                <div style="flex:1; height: 14px; background: #8b5cf6; border-radius: 2px;"></div>
-                                <div style="flex:1; height: 18px; background: #8b5cf6; border-radius: 2px;"></div>
-                                <div style="flex:1; height: 25px; background: #8b5cf6; border-radius: 2px;"></div>
-                                <div style="flex:1; height: 28px; background: #8b5cf6; border-radius: 2px;"></div>
-                                <div style="flex:1; height: 24px; background: #8b5cf6; border-radius: 2px;"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Search, filter and actions bar -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; background: rgba(15, 23, 42, 0.2); border: 1px solid var(--border-glass); border-radius: 12px; padding: 10px 16px;">
-                        <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
-                            <span style="font-size: 16px; color: var(--text-secondary);">🔍</span>
-                            <input type="text" id="sp-rules-search" class="form-input" placeholder="Search automations..." style="background: transparent; border: none; padding: 4px; font-size: 13.5px; box-shadow: none; max-width: 300px;" oninput="filterSpRulesTable()">
-                        </div>
-                        <div style="display: flex; gap: 8px;">
-                            <button class="btn" style="padding: 6px 12px; font-size: 12.5px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass);" onclick="sortSpRulesTable()">⇅ Sort</button>
-                            <button class="btn" style="padding: 6px 12px; font-size: 12.5px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass);" onclick="alert('Filtering active automations!')">⚙️ Filter</button>
-                            <a href="/fb/instagram/ui/leads/export" class="btn" style="padding: 6px 12px; font-size: 12.5px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">📥 Export Leads</a>
-                        </div>
-                    </div>
-
-                    <!-- Automations list structured as a premium table -->
-                    <div style="background: rgba(15, 23, 42, 0.2); border: 1px solid var(--border-glass); border-radius: 12px; overflow: hidden;">
-                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border-glass); padding: 12px 18px; font-size: 11.5px; text-transform: uppercase; color: var(--text-secondary); font-weight: 700; letter-spacing: 0.05em;">
-                            <div>Automations</div>
-                            <div style="text-align: center;">Followers Gained</div>
-                            <div style="text-align: center;">Runs</div>
-                            <div style="text-align: center;">Button Clicks</div>
-                            <div style="text-align: right;">Status</div>
-                        </div>
-                        <div id="sp-rules-tbody" style="display: flex; flex-direction: column;">
-                            <!-- Rows populated dynamically -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Subpanel: Settings -->
-                <div id="sp-panel-settings" class="sp-subpanel" style="display: none; flex-direction: column; gap: 20px;">
-                    <div style="font-weight: 700; font-size: 16px; border-bottom: 1px solid var(--border-glass); padding-bottom: 8px;">Spam Moderation &amp; Webhooks</div>
-                    
-                    <div id="ig-status-banner" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 8px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-weight: 600; font-size: 14px;">Business Status Check:</span>
-                            <span id="ig-status-badge" style="font-size: 11px; font-weight: 700; color: #e11d48; text-transform: uppercase; background: rgba(225,29,72,0.1); padding: 2px 8px; border-radius: 20px;">Checking...</span>
-                        </div>
-                        <p id="ig-status-msg" style="color: var(--text-secondary); font-size: 12.5px; line-height: 1.5;">Verifying connection status with Meta API...</p>
-                        <button class="btn" style="align-self: flex-start; padding: 6px 12px; font-size: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass);" onclick="checkIgStatus()">Re-verify Account Status</button>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Spam Keyword Blocklist (Auto-Hide Comments)</label>
-                        <textarea id="spam-keywords-input" class="form-input" style="height: 70px;" placeholder="e.g. promo, spam, scam, click here (comma separated)"></textarea>
-                        <span style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Comments containing any of these keywords will be automatically hidden via Graph API.</span>
-                    </div>
-
-                    <div class="form-group">
-                        <label>CRM Webhook Sync URL</label>
-                        <input type="text" id="crm-webhook-input" class="form-input" placeholder="e.g. https://make.com/webhook/123">
-                        <span style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Incoming leads (captured email, username) will be pushed here via webhook POST.</span>
-                    </div>
-
-                    <button class="btn" style="align-self: flex-start; background: #3b82f6;" onclick="saveIgSettingsFront()">Save Settings</button>
-                </div>
-
-                <!-- Subpanel: Bio Setup -->
-                <div id="sp-panel-bio" class="sp-subpanel" style="display: none;">
-                    <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 24px; width: 100%;">
-                        <div style="display: flex; flex-direction: column; gap: 16px;">
-                            <div style="font-weight: 700; font-size: 16px; border-bottom: 1px solid var(--border-glass); padding-bottom: 8px;">Link-in-Bio Customization</div>
-                            
-                            <div class="form-group">
-                                <label>Profile Username</label>
-                                <div style="display: flex; gap: 8px; align-items: center;">
-                                    <input type="text" id="insta-username" class="form-input" placeholder="e.g. mallufyed_official" onkeypress="if(event.key === 'Enter') saveInstaUsername()">
-                                    <button class="btn" style="padding: 10px 16px;" onclick="saveInstaUsername()">Save</button>
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <label>Page Title</label>
-                                <input type="text" id="bio-title-input" class="form-input" placeholder="My Creator Page">
-                            </div>
-
-                            <div class="form-group">
-                                <label>Biography</label>
-                                <textarea id="bio-desc-input" class="form-input" style="height: 60px;" placeholder="Creator bio..."></textarea>
-                            </div>
-
-                            <div class="form-group">
-                                <label>Theme &amp; Style</label>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                                    <div>
-                                        <span style="font-size: 11px; color: var(--text-secondary)">Btn BG Color</span>
-                                        <input type="color" id="bio-btn-color" class="form-input" value="#db2777" style="height: 38px; padding: 2px;">
-                                    </div>
-                                    <div>
-                                        <span style="font-size: 11px; color: var(--text-secondary)">Btn Text Color</span>
-                                        <input type="color" id="bio-text-color" class="form-input" value="#ffffff" style="height: 38px; padding: 2px;">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="form-group" style="flex-direction:row;align-items:center;gap:8px;user-select:none;cursor:pointer">
-                                <input type="checkbox" id="bio-show-feed" checked style="cursor:pointer">
-                                <label for="bio-show-feed" style="cursor:pointer;font-size:13px;color:var(--text-secondary)">Embed live Instagram media grid?</label>
-                            </div>
-
-                            <div style="display: flex; gap: 8px;">
-                                <button class="btn" style="flex: 1; background: #3b82f6;" onclick="saveBioPageSettings()">Publish Page</button>
-                                <a id="insta-live-link" href="#" target="_blank" class="btn" style="padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-glass); display: none; text-decoration: none;">View Live Page ↗</a>
-                            </div>
-                        </div>
-
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <div style="font-weight: 700; font-size: 14px; color: var(--text-secondary);">Live Storefront Preview</div>
-                            <div id="insta-iframe-container" style="flex: 1; border-radius: 16px; overflow: hidden; background: rgba(0,0,0,0.25); border: 1px dashed var(--border-glass); display: flex; align-items: center; justify-content: center; position: relative; min-height: 420px;">
-                                <div id="insta-setup-prompt" style="text-align: center; padding: 20px;">
-                                    <div style="font-size: 32px; margin-bottom: 8px;">🔗</div>
-                                    <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">Live Preview</h4>
-                                    <p style="color: var(--text-secondary); font-size: 12px; line-height: 1.4;">Enter a username to load the live custom bio site preview.</p>
-                                </div>
-                                <iframe id="insta-iframe" src="about:blank" style="display: none; width: 100%; height: 100%; border: none;"></iframe>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Subpanel: Comments -->
-                <div id="sp-panel-comments" class="sp-subpanel" style="display: none; flex-direction: column; gap: 16px;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;width:100%; border-bottom: 1px solid var(--border-glass); padding-bottom: 8px;">
-                        <div style="font-weight: 700; font-size: 16px;">Recent Media Comments</div>
-                        <button class="btn" style="padding: 6px 12px; font-size: 12.5px; background:rgba(255,255,255,0.05); border:1px solid var(--border-glass);" onclick="loadIgComments()">🔄 Refresh</button>
-                    </div>
-                    <div id="ig-comments-list" class="kw-list" style="max-height: 480px; overflow-y: auto;">
-                        <!-- Populate dynamically -->
-                    </div>
-                </div>
-
-                <!-- Subpanel: Post Scheduler -->
-                <div id="sp-panel-scheduler" class="sp-subpanel" style="display: none; flex-direction: column; gap: 16px;">
-                    <div style="font-weight: 700; font-size: 16px; border-bottom: 1px solid var(--border-glass); padding-bottom: 8px;">Schedule New Reels &amp; Posts</div>
-                    
-                    <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; width: 100%;">
-                        <div style="display:flex; flex-direction:column; gap:16px;">
-                            <div class="form-group">
-                                <label>Media File URL (Direct link to Image/Video)</label>
-                                <input type="text" id="sched-media-url" class="form-input" placeholder="e.g. https://example.com/assets/banner.jpg">
-                            </div>
-
-                            <div class="form-group">
-                                <label>Caption Text</label>
-                                <textarea id="sched-caption" class="form-input" style="height: 80px;" placeholder="Write an engaging caption..."></textarea>
-                            </div>
-
-                            <div class="form-group">
-                                <label>Publishing Date &amp; Time</label>
-                                <input type="datetime-local" id="sched-datetime" class="form-input">
-                            </div>
-
-                            <button class="btn" style="align-self: flex-start; background: #3b82f6;" onclick="schedulePost()">Schedule Post</button>
-                        </div>
-                        
-                        <div>
-                            <div style="font-weight: 600; font-size: 13.5px; color: var(--text-secondary); margin-bottom: 8px;">Scheduled &amp; Published Posts</div>
-                            <div id="ig-scheduled-list" class="kw-list" style="max-height: 380px; overflow-y: auto;">
-                                <!-- Populate dynamically -->
-                            </div>
+                        <div style="font-weight: 600; font-size: 13.5px; color: var(--text-secondary); margin-bottom: 8px;">Scheduled &amp; Published Posts</div>
+                        <div id="ig-scheduled-list" class="kw-list" style="max-height: 380px; overflow-y: auto;">
+                            <!-- Populate dynamically -->
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
-
 </div>
 
 <div id="rule-modal" class="modal">
@@ -688,102 +619,684 @@
     </div>
 </div>
 
+<style>
+/* ── Instagram Wizard Modal ────────────────────────────── */
+#ig-rule-modal .modal-content {
+  background: #0f1424;
+  border: 1px solid rgba(124,92,255,0.25);
+  border-radius: 20px;
+  max-width: 620px;
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.igwz-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 22px 26px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.igwz-title { font-size: 18px; font-weight: 700; color: #f3f4f6; }
+.igwz-step-dots { display: flex; gap: 8px; align-items: center; }
+.igwz-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.15); transition: all 0.25s; }
+.igwz-dot.active { background: #7c5cff; width: 24px; border-radius: 4px; }
+.igwz-close { background: none; border: none; font-size: 24px; color: #6b7280; cursor: pointer; line-height: 1; padding: 0; }
+.igwz-close:hover { color: #f3f4f6; }
+.igwz-body { padding: 24px 26px; flex: 1; }
+.igwz-step { display: none; }
+.igwz-step.active { display: block; }
+.igwz-step-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #7c5cff; margin-bottom: 6px; }
+.igwz-step-title { font-size: 20px; font-weight: 800; color: #f3f4f6; margin-bottom: 4px; }
+.igwz-step-sub { font-size: 13px; color: #6b7280; margin-bottom: 22px; }
+/* Type picker cards */
+.igwz-type-grid { display: flex; flex-direction: column; gap: 10px; }
+.igwz-type-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: rgba(255,255,255,0.03);
+  border: 1.5px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.igwz-type-card:hover { border-color: rgba(124,92,255,0.4); background: rgba(124,92,255,0.07); }
+.igwz-type-card.selected { border-color: #7c5cff; background: rgba(124,92,255,0.12); }
+.igwz-type-icon { font-size: 22px; flex-shrink: 0; width: 36px; text-align: center; }
+.igwz-type-info { flex: 1; }
+.igwz-type-name { font-size: 14px; font-weight: 700; color: #f3f4f6; margin-bottom: 2px; }
+.igwz-type-desc { font-size: 12px; color: #6b7280; }
+.igwz-type-arrow { color: #7c5cff; font-size: 18px; }
+/* Step 2 */
+.igwz-label { font-size: 12px; font-weight: 600; color: #9ca3af; margin-bottom: 6px; display: block; }
+.igwz-input {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 14px;
+  color: #f3f4f6;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.18s;
+}
+.igwz-input:focus { border-color: #7c5cff; }
+.igwz-input::placeholder { color: #4b5563; }
+.igwz-field { margin-bottom: 16px; }
+.igwz-scope-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.igwz-scope-btn {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  color: #9ca3af;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.18s;
+}
+.igwz-scope-btn:hover { border-color: rgba(124,92,255,0.4); }
+.igwz-scope-btn.selected { border-color: #7c5cff; color: #7c5cff; background: rgba(124,92,255,0.1); }
+.igwz-kw-area { display: flex; gap: 8px; margin-bottom: 10px; }
+.igwz-kw-add { flex-shrink: 0; padding: 10px 16px; background: rgba(124,92,255,0.15); border: 1px solid #7c5cff; border-radius: 10px; color: #a78bfa; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.igwz-kw-add:hover { background: rgba(124,92,255,0.25); }
+.igwz-kw-tags { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; }
+.igwz-kw-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(124,92,255,0.15); border: 1px solid rgba(124,92,255,0.3);
+  border-radius: 20px; padding: 3px 10px 3px 12px;
+  font-size: 12px; color: #a78bfa; font-weight: 600;
+}
+.igwz-kw-tag button { background: none; border: none; color: #7c5cff; cursor: pointer; font-size: 15px; line-height: 1; padding: 0; }
+/* Step 3 */
+.igwz-toggle-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; cursor: pointer; }
+.igwz-toggle-row input[type=checkbox] { accent-color: #7c5cff; width: 16px; height: 16px; cursor: pointer; }
+.igwz-toggle-label { font-size: 13.5px; font-weight: 600; color: #f3f4f6; cursor: pointer; }
+.igwz-toggle-label small { display: block; font-size: 11px; color: #6b7280; font-weight: 400; }
+.igwz-reveal { display: none; margin-bottom: 14px; padding-left: 26px; }
+.igwz-reveal.show { display: block; }
+/* Step 4 preview */
+.igwz-preview-phone {
+  background: #1a1f35;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  overflow: hidden;
+  max-width: 340px;
+  margin: 0 auto;
+}
+.igwz-preview-phone-header {
+  background: rgba(124,92,255,0.15);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.igwz-preview-phone-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg,#7c5cff,#ec4899); flex-shrink: 0; }
+.igwz-preview-phone-name { font-size: 13px; font-weight: 700; color: #f3f4f6; }
+.igwz-preview-phone-body { padding: 14px 12px; display: flex; flex-direction: column; gap: 8px; min-height: 140px; }
+.igwz-bubble {
+  max-width: 80%;
+  padding: 9px 13px;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.igwz-bubble.incoming { background: rgba(255,255,255,0.07); color: #d1d5db; align-self: flex-start; border-bottom-left-radius: 4px; }
+.igwz-bubble.outgoing { background: linear-gradient(135deg,#7c5cff,#5b3fd8); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+.igwz-bubble.link-btn { background: rgba(124,92,255,0.2); border: 1px solid rgba(124,92,255,0.4); color: #a78bfa; text-align: center; align-self: flex-end; font-weight: 600; }
+.igwz-preview-comment { background: rgba(255,255,255,0.04); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; color: #9ca3af; }
+.igwz-preview-comment strong { color: #f3f4f6; margin-right: 4px; }
+/* Footer */
+.igwz-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 26px 22px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  gap: 10px;
+}
+.igwz-btn-back {
+  padding: 11px 22px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  color: #9ca3af;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.18s;
+}
+.igwz-btn-back:hover { background: rgba(255,255,255,0.1); color: #f3f4f6; }
+.igwz-btn-next {
+  padding: 11px 28px;
+  background: linear-gradient(135deg,#7c5cff,#5b3fd8);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.18s;
+  flex: 1;
+  max-width: 220px;
+  margin-left: auto;
+}
+.igwz-btn-next:hover { opacity: 0.9; transform: translateY(-1px); }
+.igwz-btn-next:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.sp-avatar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.sp-avatar {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  background: linear-gradient(#0b0f19, #0b0f19) padding-box, linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%) border-box;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+.sp-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.sp-username {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff;
+}
+.sp-btn-choice-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.sp-btn-choice {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+.sp-btn-choice:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.sp-btn-choice.active {
+  background: linear-gradient(to right, rgba(124, 92, 255, 0.08), rgba(124, 92, 255, 0.15));
+  border-color: #7c5cff;
+  color: #c084fc;
+}
+.sp-switch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.sp-switch-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #f3f4f6;
+}
+.sp-switch-label small {
+  display: block;
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 400;
+  margin-top: 2px;
+}
+.sp-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 22px;
+}
+.sp-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.sp-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: rgba(255, 255, 255, 0.1);
+  transition: .3s;
+  border-radius: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.sp-slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+.sp-switch input:checked + .sp-slider {
+  background-color: #7c5cff;
+}
+.sp-switch input:checked + .sp-slider:before {
+  transform: translateX(22px);
+}
+.sp-textarea-wrap {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 8px;
+}
+.sp-textarea-wrap textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  resize: vertical;
+  color: #f3f4f6;
+  font-size: 13.5px;
+  outline: none;
+  font-family: inherit;
+}
+.sp-textarea-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 8px;
+}
+.sp-var-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #9ca3af;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.sp-var-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.sp-char-counter {
+  font-size: 11px;
+  color: #6b7280;
+}
+.sp-btn-card {
+  background: rgba(255, 255, 255, 0.01);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 10px;
+}
+.sp-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  color: #9ca3af;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 12px;
+}
+.sp-add-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+.sp-link-note {
+  font-size: 11px;
+  color: #10b981;
+  margin-top: 6px;
+}
+</style>
+
 <div id="ig-rule-modal" class="modal">
-    <div class="modal-content" style="max-width: 580px;">
-        <h3 id="ig-modal-title" style="font-size:18px;font-weight:600;margin-bottom:8px">Instagram Automation Rule</h3>
-        
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-            <div class="form-group">
-                <label for="ig-rule-name">Automation Name</label>
-                <input type="text" id="ig-rule-name" class="form-input" placeholder="e.g. Lead Ebook Reel">
-            </div>
-            <div class="form-group">
-                <label for="ig-rule-trigger">Trigger Source</label>
-                <select id="ig-rule-trigger" class="form-input" style="height:40px; background:#0f172a; color:#fff;" onchange="toggleIgRuleFields()">
-                    <option value="comment">Reel/Post Comment</option>
-                    <option value="dm">Inbound Direct Message</option>
-                    <option value="story">Story Reply</option>
-                    <option value="mention">Account Mention</option>
-                    <option value="welcome">Welcome (First DM)</option>
-                </select>
-            </div>
+  <div class="modal-content" style="padding:0;">
+    <!-- Header -->
+    <div class="igwz-header">
+      <span class="igwz-title" id="igwz-header-title">New Automation</span>
+      <div style="display:flex;align-items:center;gap:16px">
+        <div class="igwz-step-dots">
+          <div class="igwz-dot active" id="igwz-dot-1"></div>
+          <div class="igwz-dot" id="igwz-dot-2"></div>
+          <div class="igwz-dot" id="igwz-dot-3"></div>
+          <div class="igwz-dot" id="igwz-dot-4"></div>
         </div>
-
-        <div class="form-group" id="ig-rule-keywords-group">
-            <label for="ig-rule-keywords">Trigger Keywords (comma separated)</label>
-            <input type="text" id="ig-rule-keywords" class="form-input" placeholder="e.g. ebook, link, access">
-        </div>
-
-        <div class="form-group">
-            <label for="ig-rule-dm-msg">Initial DM Message Response</label>
-            <textarea id="ig-rule-dm-msg" class="form-input" style="height:70px;" placeholder="Here is your download link..."></textarea>
-        </div>
-
-        <!-- Conversational/Interactive Flows Section -->
-        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); border-radius: 8px; padding: 12px; display:flex; flex-direction:column; gap:10px;">
-            <div style="font-weight:600; font-size:13px; color:#a855f7;">Interactive Flow &amp; Lead Capture Options</div>
-            
-            <div style="display:flex; gap:16px;">
-                <label style="display:inline-flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer; user-select:none;">
-                    <input type="checkbox" id="ig-rule-email-capture" onchange="toggleIgFlowOptions()"> Email Capture
-                </label>
-                <label style="display:inline-flex; align-items:center; gap:6px; font-size:12.5px; cursor:pointer; user-select:none;">
-                    <input type="checkbox" id="ig-rule-followup-check" onchange="toggleIgFlowOptions()"> Ask Follow-up Question
-                </label>
-            </div>
-
-            <!-- Email Capture Subfields -->
-            <div id="ig-email-fields" style="display:none; flex-direction:column; gap:8px; border-left:2px solid #db2777; padding-left:10px;">
-                <div class="form-group">
-                    <label style="font-size:11px;">Email Prompt Question</label>
-                    <input type="text" id="ig-rule-email-prompt" class="form-input" placeholder="What's your best email address to send the PDF?">
-                </div>
-                <div class="form-group">
-                    <label style="font-size:11px;">Success Response</label>
-                    <input type="text" id="ig-rule-email-success" class="form-input" placeholder="Thank you! We've sent the PDF to your email.">
-                </div>
-            </div>
-
-            <!-- Followup Subfields -->
-            <div id="ig-followup-fields" style="display:none; flex-direction:column; gap:8px; border-left:2px solid #a855f7; padding-left:10px;">
-                <div class="form-group">
-                    <label style="font-size:11px;">Follow-up Question</label>
-                    <input type="text" id="ig-rule-followup-msg" class="form-input" placeholder="Would you like us to notify you about upcoming live events?">
-                </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
-                    <div class="form-group">
-                        <label style="font-size:11px;">Yes Branch Reply</label>
-                        <input type="text" id="ig-rule-yes-branch" class="form-input" placeholder="Perfect! You're on the list.">
-                    </div>
-                    <div class="form-group">
-                        <label style="font-size:11px;">No Branch Reply</label>
-                        <input type="text" id="ig-rule-no-branch" class="form-input" placeholder="No worries. Let us know if you change your mind.">
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:8px;">
-            <div class="form-group">
-                <label for="ig-rule-delay">Automation Send Delay (Seconds)</label>
-                <input type="number" id="ig-rule-delay" class="form-input" value="0" min="0" max="60">
-            </div>
-            <div class="form-group" id="ig-rule-reply-group">
-                <label for="ig-rule-reply">Public Comment Reply Text (Optional)</label>
-                <input type="text" id="ig-rule-reply" class="form-input" placeholder="Sent it to your DMs! Check it out.">
-            </div>
-        </div>
-
-        <div class="modal-footer" style="margin-top:12px;">
-            <button class="btn btn-danger" onclick="closeIgModal()">Cancel</button>
-            <button class="btn" onclick="saveIgRule()">Save Rule</button>
-        </div>
+        <button class="igwz-close" onclick="closeIgModal()">&#x2715;</button>
+      </div>
     </div>
+
+    <!-- Body -->
+    <div class="igwz-body">
+
+      <!-- STEP 1: Type picker -->
+      <div class="igwz-step active" id="igwz-step-1">
+        <div class="igwz-step-label">Step 1 of 4</div>
+        <div class="igwz-step-title">Choose Automation Type</div>
+        <div class="igwz-step-sub">Select what interaction should trigger this automation.</div>
+        <div class="igwz-type-grid">
+          <div class="igwz-type-card" id="igwz-type-comment" onclick="igwzSelectType('comment')">
+            <span class="igwz-type-icon">&#x1F4AC;</span>
+            <div class="igwz-type-info">
+              <div class="igwz-type-name">Post / Reel Comment</div>
+              <div class="igwz-type-desc">Reply to comments on a specific post or reel with a DM</div>
+            </div>
+            <span class="igwz-type-arrow">&#x203A;</span>
+          </div>
+          <div class="igwz-type-card" id="igwz-type-story" onclick="igwzSelectType('story')">
+            <span class="igwz-type-icon">&#x1F4D6;</span>
+            <div class="igwz-type-info">
+              <div class="igwz-type-name">Story Reply</div>
+              <div class="igwz-type-desc">DM anyone who replies to your story</div>
+            </div>
+            <span class="igwz-type-arrow">&#x203A;</span>
+          </div>
+          <div class="igwz-type-card" id="igwz-type-live" onclick="igwzSelectType('live')">
+            <span class="igwz-type-icon">&#x1F534;</span>
+            <div class="igwz-type-info">
+              <div class="igwz-type-name">Live Comment</div>
+              <div class="igwz-type-desc">DM anyone who comments during your Live</div>
+            </div>
+            <span class="igwz-type-arrow">&#x203A;</span>
+          </div>
+          <div class="igwz-type-card" id="igwz-type-dm" onclick="igwzSelectType('dm')">
+            <span class="igwz-type-icon">&#x2709;&#xFE0F;</span>
+            <div class="igwz-type-info">
+              <div class="igwz-type-name">Incoming DM</div>
+              <div class="igwz-type-desc">Auto-reply when someone sends you a DM with a keyword</div>
+            </div>
+            <span class="igwz-type-arrow">&#x203A;</span>
+          </div>
+          <div class="igwz-type-card" id="igwz-type-mention" onclick="igwzSelectType('mention')">
+            <span class="igwz-type-icon">&#x1F4E3;</span>
+            <div class="igwz-type-info">
+              <div class="igwz-type-name">Mention</div>
+              <div class="igwz-type-desc">DM anyone who @mentions you in their story or post</div>
+            </div>
+            <span class="igwz-type-arrow">&#x203A;</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2: Trigger Setup -->
+      <div class="igwz-step" id="igwz-step-2">
+        <div class="igwz-step-label">Step 2 of 4</div>
+        <div class="igwz-step-title">Trigger Setup</div>
+        <div class="igwz-step-sub">Name your automation and configure how it triggers.</div>
+
+        <div class="igwz-field">
+          <label class="igwz-label" for="igwz-name">Automation Name</label>
+          <input type="text" id="igwz-name" class="igwz-input" placeholder="e.g. Campaign Link AutoDM" oninput="igwzCheckStep2()">
+        </div>
+
+        <!-- Post scope: only for comment type -->
+        <div id="igwz-scope-section" class="igwz-field" style="display:none">
+          <label class="igwz-label">Which posts / reels?</label>
+          <div class="igwz-scope-grid">
+            <button class="igwz-scope-btn selected" id="igwz-scope-all" onclick="igwzSelectScope('all')">&#x1F4E2; All Posts &amp; Reels</button>
+            <button class="igwz-scope-btn" id="igwz-scope-specific" onclick="igwzSelectScope('specific')">&#x1F4CC; Specific Posts</button>
+          </div>
+          <!-- Post thumbnail grid (shown when Specific Posts is selected) -->
+          <div id="igwz-post-grid-wrap" style="display:none;margin-top:10px">
+            <div id="igwz-post-grid" style="
+              display:grid;
+              grid-template-columns:repeat(3,1fr);
+              gap:8px;
+              max-height:260px;
+              overflow-y:auto;
+              padding:2px;
+            ">
+              <div style="grid-column:1/-1;text-align:center;padding:20px;color:#6b7280;font-size:13px">Loading posts...</div>
+            </div>
+            <div id="igwz-post-count" style="font-size:11px;color:#7c5cff;font-weight:600;margin-top:6px"></div>
+          </div>
+        </div>
+
+        <div class="sp-avatar-wrap">
+          <div class="sp-avatar">
+            <img id="sp-wz-avatar-img" src="/static/default-avatar.png" alt="Avatar" onerror="this.src='https://cdn-icons-png.flaticon.com/512/875/875610.png'">
+          </div>
+          <span class="sp-username" id="sp-wz-username-text">Instagram Account</span>
+        </div>
+
+        <div class="igwz-field">
+          <label class="igwz-label">What kind of comment should trigger this automation?</label>
+          <div class="sp-btn-choice-group">
+            <button type="button" class="sp-btn-choice active" id="sp-trigger-kw-btn" onclick="spSelectTriggerMode('keyword')">Specific keyword</button>
+            <button type="button" class="sp-btn-choice" id="sp-trigger-any-btn" onclick="spSelectTriggerMode('all')">Any comment</button>
+          </div>
+        </div>
+
+        <div id="sp-kw-section">
+          <label class="igwz-label">Should include any of these:</label>
+          <div class="igwz-kw-area">
+            <input type="text" id="igwz-kw-input" class="igwz-input" placeholder="Type keyword (min. 1 characters)" onkeydown="if(event.key==='Enter')igwzAddKw()" style="flex:1; margin-bottom: 0;">
+            <button class="igwz-kw-add" onclick="igwzAddKw()">+ Add</button>
+          </div>
+          <div class="igwz-kw-tags" id="igwz-kw-tags" style="margin-top: 8px;"></div>
+          <a href="#" onclick="alert('Excluded keywords can be added inside main configuration tab.'); return false;" style="font-size:12px; color:#7c5cff; text-decoration:none; margin-top:8px; display:inline-block;">Add excluded keywords?</a>
+        </div>
+
+        <div class="sp-switch-row" style="margin-top: 20px;">
+          <div class="sp-switch-label">
+            Auto-Reply to comments on the post
+            <small>Instantly post a public comment reply to users who comment</small>
+          </div>
+          <label class="sp-switch">
+            <input type="checkbox" id="sp-public-reply-toggle" onchange="toggleSpPublicReplyField()">
+            <span class="sp-slider"></span>
+          </label>
+        </div>
+        <div id="sp-public-reply-field-reveal" style="display:none; margin-bottom: 16px;">
+          <label class="igwz-label">Public Comment Reply Text</label>
+          <input type="text" id="igwz-public-reply" class="igwz-input" placeholder="Thanks @{username}! Check your DMs 📥">
+        </div>
+      </div>
+
+      <!-- STEP 3: Message & Options -->
+      <div class="igwz-step" id="igwz-step-3">
+        <div class="igwz-step-label">Step 3 of 4</div>
+        <div class="igwz-step-title">Message &amp; Options</div>
+        <div class="igwz-step-sub">Configure delay, gates, and the primary message templates.</div>
+
+        <div class="sp-avatar-wrap">
+          <div class="sp-avatar">
+            <img id="sp-wz-avatar-img-step3" src="/static/default-avatar.png" alt="Avatar" onerror="this.src='https://cdn-icons-png.flaticon.com/512/875/875610.png'">
+          </div>
+          <span class="sp-username" id="sp-wz-username-text-step3">Instagram Account</span>
+        </div>
+
+        <div class="igwz-field">
+          <label class="igwz-label">Set a time delay *</label>
+          <div style="display:flex; gap:10px; margin-bottom: 8px;">
+            <input type="number" id="sp-delay-val" class="igwz-input" value="1" min="0" oninput="spUpdateDelaySeconds(); igwzUpdatePreview();" style="flex:2; margin-bottom: 0;">
+            <select id="sp-delay-unit" class="igwz-input" onchange="spUpdateDelaySeconds(); igwzUpdatePreview();" style="flex:1; padding:6px 12px; margin-bottom: 0;">
+              <option value="seconds">Seconds</option>
+              <option value="minutes" selected>Minutes</option>
+              <option value="hours">Hours</option>
+            </select>
+          </div>
+          <div style="font-size:11.5px; color:var(--text-secondary);">
+            We'll wait <span id="sp-delay-preview-text" style="color:#a78bfa; font-weight:600;">1 minute</span> after someone triggers this automation before sending the first DM.
+          </div>
+        </div>
+
+        <div style="margin-top: 20px; margin-bottom: 8px;">
+          <label class="igwz-label" style="font-size: 13px; color: #fff;">Before you send your primary DM, send them...</label>
+        </div>
+
+        <div class="sp-switch-row">
+          <div class="sp-switch-label">
+            a DM asking to follow you
+            <small>Verify follow state before delivering link</small>
+          </div>
+          <label class="sp-switch">
+            <input type="checkbox" id="sp-ask-follow" onchange="igwzToggleReveal('sp-follow-reveal','sp-ask-follow');igwzUpdatePreview()">
+            <span class="sp-slider"></span>
+          </label>
+        </div>
+        <div class="igwz-reveal" id="sp-follow-reveal">
+          <label class="igwz-label">Follow Prompt Message</label>
+          <input type="text" id="sp-follow-prompt" class="igwz-input" placeholder="Follow us to unlock the link!" oninput="igwzUpdatePreview()">
+        </div>
+
+        <div class="sp-switch-row">
+          <div class="sp-switch-label">
+            a DM asking to share their email
+            <small>Collect email address in your leads list</small>
+          </div>
+          <label class="sp-switch">
+            <input type="checkbox" id="sp-email" onchange="igwzToggleReveal('sp-email-reveal','sp-email');igwzUpdatePreview()">
+            <span class="sp-slider"></span>
+          </label>
+        </div>
+        <div class="igwz-reveal" id="sp-email-reveal">
+          <label class="igwz-label">Email Prompt Message</label>
+          <input type="text" id="sp-email-prompt" class="igwz-input" placeholder="What's your best email address?" oninput="igwzUpdatePreview()">
+        </div>
+
+        <div style="margin-top: 24px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 16px;">
+          <label class="igwz-label" style="font-size: 13px; color: #fff;">Then send the primary DM...</label>
+          <div style="font-size:12px; color:var(--text-secondary); margin-bottom:14px;">Write the message you want to auto-send with a button that takes them to your link or product.</div>
+        </div>
+
+        <div class="igwz-field">
+          <label class="igwz-label">DM type</label>
+          <select id="sp-dm-type" class="igwz-input" onchange="toggleSpDMTypeFields(); igwzUpdatePreview();" style="width:100%;">
+            <option value="text_only">Text only</option>
+            <option value="text_button" selected>Text + Button</option>
+          </select>
+        </div>
+
+        <div class="igwz-field">
+          <label class="igwz-label">DM content</label>
+          <div class="sp-textarea-wrap">
+            <textarea id="igwz-dm" rows="4" placeholder="Hi 👋 Thanks for your comment 🙌 As promised, here's the link for you ⬇️" oninput="spUpdateDMCharCounter(); igwzUpdatePreview();"></textarea>
+            <div class="sp-textarea-footer">
+              <button type="button" class="sp-var-btn" onclick="spInsertVariable('{username}')"># Add a variable</button>
+              <span class="sp-char-counter" id="sp-dm-char-count">0/900</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="sp-button-builder-section">
+          <div id="sp-buttons-container"></div>
+        </div>
+
+        <hr style="border:none; border-top:1px solid rgba(255,255,255,0.08); margin:20px 0;">
+        <div class="igwz-field">
+          <label class="igwz-label" style="font-size:13px; color:#a78bfa; display:flex; justify-content:space-between; align-items:center;">
+            <span>Follow-up Sequence Steps</span>
+            <button type="button" class="igwz-kw-add" onclick="addIgFollowUpStep()" style="padding:4px 10px; font-size:11px;">+ Add Step</button>
+          </label>
+          <div id="igwz-steps-container" style="display:flex; flex-direction:column; gap:12px; margin-top:10px;"></div>
+        </div>
+      </div>
+
+      <!-- STEP 4: Preview & Save -->
+      <div class="igwz-step" id="igwz-step-4">
+        <div class="igwz-step-label">Step 4 of 4</div>
+        <div class="igwz-step-title">Preview &amp; Save</div>
+        <div class="igwz-step-sub">Review the automation sequence before saving.</div>
+
+        <div id="sp-preview-summary-card" style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:14px 16px; margin-bottom:16px;">
+          <div style="font-size:11px; text-transform:uppercase; color:#7c5cff; font-weight:700; margin-bottom:8px;">When someone...</div>
+          <div style="display:flex; gap:10px; align-items:flex-start;">
+            <div id="sp-preview-post-avatar-wrap" style="width:40px; height:40px; border-radius:6px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); overflow:hidden; flex-shrink:0;">
+              <img id="sp-preview-post-thumb" src="" style="width:100%; height:100%; object-fit:cover; display:none;">
+            </div>
+            <div>
+              <div style="font-size:13px; font-weight:600; color:#fff;" id="sp-preview-post-header">comments on this specific post</div>
+              <div style="font-size:11.5px; color:var(--text-secondary); margin-top:3px;" id="sp-preview-post-desc">All Posts & Reels</div>
+            </div>
+          </div>
+          
+          <div style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.04); padding-top:12px;">
+            <div style="font-size:11px; text-transform:uppercase; color:#7c5cff; font-weight:700; margin-bottom:4px;">and comments...</div>
+            <div id="sp-preview-trigger-text" style="font-size:13px; color:#fff;">Any comment</div>
+          </div>
+
+          <div style="margin-top:10px;">
+            <div id="sp-preview-delay-text" style="font-size:12.5px; color:var(--text-secondary); display:flex; align-items:center; gap:6px;">
+              ⏱️ then wait 1 minute after the trigger
+            </div>
+          </div>
+        </div>
+
+        <div style="font-size:11.5px; text-transform:uppercase; color:#7c5cff; font-weight:700; margin-bottom:8px;">after they click the button, send the primary DM</div>
+
+        <div class="igwz-preview-comment" id="igwz-prev-comment" style="display:none">
+          <strong>@username</strong><span id="igwz-prev-comment-text"></span>
+        </div>
+
+        <div class="igwz-preview-phone">
+          <div class="igwz-preview-phone-header">
+            <div class="igwz-preview-phone-avatar"></div>
+            <div>
+              <div class="igwz-preview-phone-name">Instagram Direct</div>
+              <div style="font-size:11px;color:#7c5cff">via Automation</div>
+            </div>
+          </div>
+          <div class="igwz-preview-phone-body" id="igwz-preview-body">
+            <div class="igwz-bubble incoming">Trigger message...</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /igwz-body -->
+
+    <!-- Footer -->
+    <div class="igwz-footer">
+      <button class="igwz-btn-back" id="igwz-back" onclick="igwzBack()" style="display:none">&#x2190; Back</button>
+      <button class="igwz-btn-next" id="igwz-next" onclick="igwzNext()">Next &#x2192;</button>
+    </div>
+  </div>
 </div>
-
-
 <script src="/socket.io/socket.io.js"></script>
 <script>
+// Format Helper
+function formatNumberWithK(num) {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+}
+
 let ytIframeLoaded = false;
 let fbIframeLoaded = false;
 function switchTab(tab) {
@@ -800,6 +1313,9 @@ function switchTab(tab) {
         const iframe = document.getElementById('fb-iframe');
         iframe.src = iframe.dataset.src;
         fbIframeLoaded = true;
+    }
+    if (tab === 'insta') {
+        switchSpSubTab('rules');
     }
 }
 function onYTIframeLoad() {
@@ -1173,31 +1689,53 @@ function switchSpSubTab(subTab) {
 async function checkIgStatus() {
     const badge = document.getElementById('ig-status-badge');
     const msg = document.getElementById('ig-status-msg');
-    if (!badge || !msg) return;
     
-    badge.textContent = 'Checking...';
-    badge.style.background = 'rgba(255,255,255,0.08)';
-    badge.style.color = 'var(--text-secondary)';
+    if (badge) {
+        badge.textContent = 'Checking...';
+        badge.style.background = 'rgba(255,255,255,0.08)';
+        badge.style.color = 'var(--text-secondary)';
+    }
     
     try {
         const res = await fetch('/fb/instagram/ui/status-check');
         const data = await res.json();
         if (data.ok) {
-            badge.textContent = 'Verified';
-            badge.style.background = 'rgba(34,197,94,0.1)';
-            badge.style.color = '#22c55e';
-            msg.textContent = data.message;
+            if (badge) {
+                badge.textContent = 'Verified';
+                badge.style.background = 'rgba(34,197,94,0.1)';
+                badge.style.color = '#22c55e';
+            }
+            if (msg) msg.textContent = data.message;
+            
+            // Set wizard profile information
+            const username = data.username || 'Instagram Account';
+            const avatar = data.profile_picture_url || 'https://cdn-icons-png.flaticon.com/512/875/875610.png';
+            
+            const elUsr = document.getElementById('sp-wz-username-text');
+            const elUsr3 = document.getElementById('sp-wz-username-text-step3');
+            const elImg = document.getElementById('sp-wz-avatar-img');
+            const elImg3 = document.getElementById('sp-wz-avatar-img-step3');
+            
+            if (elUsr) elUsr.textContent = username;
+            if (elUsr3) elUsr3.textContent = username;
+            if (elImg) elImg.src = avatar;
+            if (elImg3) elImg3.src = avatar;
+            
         } else {
-            badge.textContent = 'Setup Required';
-            badge.style.background = 'rgba(225,29,72,0.1)';
-            badge.style.color = '#e11d48';
-            msg.textContent = data.error;
+            if (badge) {
+                badge.textContent = 'Setup Required';
+                badge.style.background = 'rgba(225,29,72,0.1)';
+                badge.style.color = '#e11d48';
+            }
+            if (msg) msg.textContent = data.error;
         }
     } catch(e) {
-        badge.textContent = 'Error';
-        badge.style.background = 'rgba(225,29,72,0.1)';
-        badge.style.color = '#e11d48';
-        msg.textContent = 'Failed to connect to backend: ' + e.message;
+        if (badge) {
+            badge.textContent = 'Error';
+            badge.style.background = 'rgba(225,29,72,0.1)';
+            badge.style.color = '#e11d48';
+        }
+        if (msg) msg.textContent = 'Failed to connect to backend: ' + e.message;
     }
 }
 
@@ -1270,7 +1808,6 @@ async function saveBioPageSettings() {
         });
         const data = await res.json();
         if (data.ok) {
-            // Refresh iframe preview
             const username = localStorage.getItem('superprofile_username');
             if (username) loadInstaIframe(username);
         } else {
@@ -1321,7 +1858,7 @@ async function loadIgRules() {
     if (!tbody) return;
     tbody.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:20px;">Loading automation rules...</div>';
     try {
-        const res = await fetch('/fb/ui/ig_automations');
+        const res = await fetch('/fb/instagram/ui/automations');
         igRules = await res.json();
         renderIgRules();
     } catch(e) {
@@ -1342,7 +1879,7 @@ function renderIgRules() {
         const activeClass = rule.active !== false ? 'checked' : '';
         const keywords = rule.keywords ? rule.keywords.join(', ') : 'any';
         const typeBadge = `<span style="font-size:10px; font-weight:700; background:rgba(59,130,246,0.12); color:#3b82f6; border:1px solid rgba(59,130,246,0.2); padding:2px 6px; border-radius:10px; text-transform:uppercase;">${rule.trigger_type || 'comment'}</span>`;
-        const flowBadge = rule.email_capture ? `<span style="font-size:10px; font-weight:700; background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.2); padding:2px 6px; border-radius:10px; text-transform:uppercase;">Lead</span>` : (rule.follow_up_message ? `<span style="font-size:10px; font-weight:700; background:rgba(139,92,246,0.12); color:#8b5cf6; border:1px solid rgba(139,92,246,0.2); padding:2px 6px; border-radius:10px; text-transform:uppercase;">Flow</span>` : '');
+        const flowBadge = rule.email_capture ? `<span style="font-size:10px; font-weight:700; background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.2); padding:2px 6px; border-radius:10px; text-transform:uppercase;">Lead</span>` : ((rule.follow_up_steps && rule.follow_up_steps.length > 0) ? `<span style="font-size:10px; font-weight:700; background:rgba(236,72,153,0.12); color:#ec4899; border:1px solid rgba(236,72,153,0.2); padding:2px 6px; border-radius:10px; text-transform:uppercase;">Sequence</span>` : (rule.follow_up_message ? `<span style="font-size:10px; font-weight:700; background:rgba(139,92,246,0.12); color:#8b5cf6; border:1px solid rgba(139,92,246,0.2); padding:2px 6px; border-radius:10px; text-transform:uppercase;">Flow</span>` : ''));
         
         const row = document.createElement('div');
         row.style.display = 'grid';
@@ -1356,9 +1893,9 @@ function renderIgRules() {
         row.onmouseover = () => { row.style.background = 'rgba(255,255,255,0.02)'; };
         row.onmouseout = () => { row.style.background = 'transparent'; };
         
-        const runs = idx * 24 + 11;
-        const clicks = idx * 8 + 3;
-        const followers = idx * 15 + 4;
+        const runs = rule.total_runs || 0;
+        const clicks = rule.dms_sent || 0;
+        const followers = rule.follow_gate_conversions || 0;
         
         row.innerHTML = `
             <div style="min-width:0; padding-right:12px;">
@@ -1418,7 +1955,7 @@ async function toggleIgRule(idx) {
     const rule = igRules[idx];
     const newActive = rule.active === false ? true : false;
     try {
-        const res = await fetch(`/fb/ui/automations/${idx}/toggle`, {
+        const res = await fetch(`/fb/instagram/ui/automations/${idx}/toggle`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ active: newActive })
@@ -1436,152 +1973,553 @@ async function toggleIgRule(idx) {
     }
 }
 
+// ══════════════════════════════════════════════════════
+// Instagram 4-Step Wizard Controller
+// ══════════════════════════════════════════════════════
+let igwzStep = 1;
+let igwzData = {
+  type: null,
+  name: '',
+  trigger: 'all',
+  keywords: [],
+  scope: 'all',
+  dmMessage: '',
+  publicReply: '',
+  askFollow: false,
+  followPrompt: '',
+  emailCapture: false,
+  emailPrompt: '',
+  linkUrl: '',
+  delaySeconds: 0
+};
+
 function openCreateIgRuleModal() {
-    editingIgRuleIdx = null;
-    document.getElementById('ig-modal-title').textContent = 'Create Responder Rule';
-    document.getElementById('ig-rule-name').value = '';
-    document.getElementById('ig-rule-trigger').value = 'comment';
-    document.getElementById('ig-rule-keywords').value = '';
-    document.getElementById('ig-rule-dm-msg').value = '';
-    document.getElementById('ig-rule-email-capture').checked = false;
-    document.getElementById('ig-rule-followup-check').checked = false;
-    document.getElementById('ig-rule-email-prompt').value = '';
-    document.getElementById('ig-rule-email-success').value = '';
-    document.getElementById('ig-rule-followup-msg').value = '';
-    document.getElementById('ig-rule-yes-branch').value = '';
-    document.getElementById('ig-rule-no-branch').value = '';
-    document.getElementById('ig-rule-delay').value = 0;
-    document.getElementById('ig-rule-reply').value = '';
-    
-    toggleIgRuleFields();
-    toggleIgFlowOptions();
-    document.getElementById('ig-rule-modal').classList.add('open');
+  editingIgRuleIdx = null;
+  igwzData = { type:null, name:'', trigger:'all', keywords:[], scope:'all', dmMessage:'', publicReply:'', askFollow:false, followPrompt:'', emailCapture:false, emailPrompt:'', linkUrl:'', delaySeconds:0 };
+  igwzGoToStep(1);
+  igwzReset();
+  document.getElementById('ig-rule-modal').classList.add('open');
 }
 
+let igFollowUpSteps = [];
+
 function openEditIgRuleModal(idx) {
-    editingIgRuleIdx = idx;
-    const rule = igRules[idx];
-    document.getElementById('ig-modal-title').textContent = 'Edit Responder Rule';
-    document.getElementById('ig-rule-name').value = rule.name || '';
-    document.getElementById('ig-rule-trigger').value = rule.trigger_type || 'comment';
-    document.getElementById('ig-rule-keywords').value = rule.keywords ? rule.keywords.join(', ') : '';
-    document.getElementById('ig-rule-dm-msg').value = rule.dm_message || '';
-    document.getElementById('ig-rule-email-capture').checked = !!rule.email_capture;
-    document.getElementById('ig-rule-followup-check').checked = !!rule.follow_up_message;
-    document.getElementById('ig-rule-email-prompt').value = rule.email_prompt || '';
-    document.getElementById('ig-rule-email-success').value = rule.email_success_message || '';
-    document.getElementById('ig-rule-followup-msg').value = rule.follow_up_message || '';
-    document.getElementById('ig-rule-yes-branch').value = rule.branch_yes_reply || '';
-    document.getElementById('ig-rule-no-branch').value = rule.branch_no_reply || '';
-    document.getElementById('ig-rule-delay').value = rule.delay_seconds || 0;
-    document.getElementById('ig-rule-reply').value = rule.reply || '';
-    
-    toggleIgRuleFields();
-    toggleIgFlowOptions();
-    document.getElementById('ig-rule-modal').classList.add('open');
+  editingIgRuleIdx = idx;
+  const rule = igRules[idx];
+  igwzData = {
+    type: rule.trigger_type || 'comment',
+    name: rule.name || '',
+    trigger: (rule.keywords && rule.keywords.length > 0) ? 'keyword' : 'all',
+    keywords: rule.keywords || [],
+    scope: rule.scope || 'all',
+    dmMessage: rule.dm_message || '',
+    publicReply: rule.reply || '',
+    askFollow: !!rule.ask_follow,
+    followPrompt: rule.follow_prompt || '',
+    emailCapture: !!rule.email_capture,
+    emailPrompt: rule.email_prompt || '',
+    linkUrl: rule.link_url || '',
+    delaySeconds: rule.delay_seconds || 0
+  };
+  igFollowUpSteps = rule.follow_up_steps ? JSON.parse(JSON.stringify(rule.follow_up_steps)) : [];
+  igwzGoToStep(1);
+  igwzReset();
+  // pre-select type card
+  if (igwzData.type) {
+    const card = document.getElementById('igwz-type-' + igwzData.type);
+    if (card) card.classList.add('selected');
+  }
+  igwzGoToStep(2);
+  // fill step 2
+  document.getElementById('igwz-name').value = igwzData.name;
+  igwzSelectScope(igwzData.scope);
+  spSelectTriggerMode(igwzData.trigger === 'keyword' ? 'keyword' : 'all');
+  igwzRenderKwTags();
+  
+  const replyText = rule.reply || '';
+  document.getElementById('sp-public-reply-toggle').checked = !!replyText;
+  document.getElementById('igwz-public-reply').value = replyText;
+  toggleSpPublicReplyField();
+
+  // fill step 3
+  document.getElementById('igwz-dm').value = igwzData.dmMessage;
+  
+  document.getElementById('sp-ask-follow').checked = igwzData.askFollow;
+  if (igwzData.askFollow) document.getElementById('sp-follow-reveal').classList.add('show');
+  document.getElementById('sp-follow-prompt').value = igwzData.followPrompt;
+  
+  document.getElementById('sp-email').checked = igwzData.emailCapture;
+  if (igwzData.emailCapture) document.getElementById('sp-email-reveal').classList.add('show');
+  document.getElementById('sp-email-prompt').value = igwzData.emailPrompt;
+  
+  const buttonEnabled = !!rule.button_enabled;
+  document.getElementById('sp-dm-type').value = buttonEnabled ? 'text_button' : 'text_only';
+  toggleSpDMTypeFields();
+  
+  // Load buttons — prefer new multi-button array, fall back to legacy single button
+  if (rule.buttons && rule.buttons.length > 0) {
+    spWizardButtons = rule.buttons.map(b => ({ title: b.title || '', url: b.url || '' }));
+  } else if (rule.button_label || rule.link_url) {
+    spWizardButtons = [{ title: rule.button_label || '', url: rule.link_url || '' }];
+  } else {
+    spWizardButtons = [];
+  }
+  spRenderWizardButtons();
+  
+  const seconds = rule.delay_seconds || 0;
+  if (seconds >= 3600 && seconds % 3600 === 0) {
+      document.getElementById('sp-delay-val').value = seconds / 3600;
+      document.getElementById('sp-delay-unit').value = 'hours';
+  } else if (seconds >= 60 && seconds % 60 === 0) {
+      document.getElementById('sp-delay-val').value = seconds / 60;
+      document.getElementById('sp-delay-unit').value = 'minutes';
+  } else {
+      document.getElementById('sp-delay-val').value = seconds;
+      document.getElementById('sp-delay-unit').value = 'seconds';
+  }
+  spUpdateDelaySeconds();
+  spUpdateDMCharCounter();
+  spUpdateButtonCharCounter();
+  
+  renderIgFollowUpSteps();
+  document.getElementById('ig-rule-modal').classList.add('open');
 }
 
 function closeIgModal() {
-    document.getElementById('ig-rule-modal').classList.remove('open');
+  document.getElementById('ig-rule-modal').classList.remove('open');
 }
 
-function toggleIgRuleFields() {
-    const trigger = document.getElementById('ig-rule-trigger').value;
-    const kwGroup = document.getElementById('ig-rule-keywords-group');
-    const commentReplyGroup = document.getElementById('ig-rule-reply-group');
-    
-    if (trigger === 'welcome' || trigger === 'mention') {
-        if (kwGroup) kwGroup.style.display = 'none';
-    } else {
-        if (kwGroup) kwGroup.style.display = 'block';
+function igwzReset() {
+  document.querySelectorAll('.igwz-type-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('igwz-name').value = '';
+  document.getElementById('igwz-dm').value = '';
+  document.getElementById('igwz-public-reply').value = '';
+  
+  document.getElementById('sp-public-reply-toggle').checked = false;
+  toggleSpPublicReplyField();
+  
+  document.getElementById('sp-ask-follow').checked = false;
+  document.getElementById('sp-follow-reveal').classList.remove('show');
+  document.getElementById('sp-follow-prompt').value = '';
+  
+  document.getElementById('sp-email').checked = false;
+  document.getElementById('sp-email-reveal').classList.remove('show');
+  document.getElementById('sp-email-prompt').value = '';
+  
+  document.getElementById('sp-dm-type').value = 'text_button';
+  toggleSpDMTypeFields();
+  
+  document.getElementById('sp-delay-val').value = '1';
+  document.getElementById('sp-delay-unit').value = 'minutes';
+  spUpdateDelaySeconds();
+  spUpdateDMCharCounter();
+  spWizardButtons = [];
+  spRenderWizardButtons();
+  
+  if (editingIgRuleIdx === null) {
+    igFollowUpSteps = [];
+  }
+  renderIgFollowUpSteps();
+  
+  igwzData.keywords = [];
+  igwzData.post_ids = [];
+  igwzPostsLoaded = false;
+  igwzSelectedPostIds = {};
+  const gridWrap = document.getElementById('igwz-post-grid-wrap');
+  if (gridWrap) gridWrap.style.display = 'none';
+  const grid = document.getElementById('igwz-post-grid');
+  if (grid) grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:#6b7280;font-size:13px">Loading posts...</div>';
+  const count = document.getElementById('igwz-post-count');
+  if (count) count.textContent = '';
+  igwzRenderKwTags();
+  igwzSelectScope('all');
+  igwzSelectTrigger('all');
+}
+
+function igwzGoToStep(n) {
+  igwzStep = n;
+  document.querySelectorAll('.igwz-step').forEach(s => s.classList.remove('active'));
+  const stepEl = document.getElementById('igwz-step-' + n);
+  if (stepEl) stepEl.classList.add('active');
+  // dots
+  for (let i = 1; i <= 4; i++) {
+    const dot = document.getElementById('igwz-dot-' + i);
+    if (dot) dot.classList.toggle('active', i === n);
+  }
+  // header title
+  const titles = {1:'Choose Automation Type', 2:'Trigger Setup', 3:'Message & Options', 4:'Preview & Save'};
+  document.getElementById('igwz-header-title').textContent = titles[n] || 'New Automation';
+  // back/next buttons
+  document.getElementById('igwz-back').style.display = n > 1 ? 'block' : 'none';
+  const nextBtn = document.getElementById('igwz-next');
+  nextBtn.textContent = n === 4 ? 'Save Rule' : 'Next →';
+  // step-specific setup
+  if (n === 2) {
+    const isComment = (igwzData.type === 'comment' || igwzData.type === 'live');
+    document.getElementById('igwz-scope-section').style.display = isComment ? 'block' : 'none';
+  }
+  if (n === 3) {
+    const hasPublicReply = (igwzData.type === 'comment' || igwzData.type === 'live');
+    document.getElementById('igwz-public-reply-field').style.display = hasPublicReply ? 'block' : 'none';
+  }
+  if (n === 4) {
+    igwzUpdatePreview();
+  }
+}
+
+function igwzSelectType(type) {
+  igwzData.type = type;
+  document.querySelectorAll('.igwz-type-card').forEach(c => c.classList.remove('selected'));
+  const card = document.getElementById('igwz-type-' + type);
+  if (card) card.classList.add('selected');
+  // auto-advance
+  setTimeout(() => igwzGoToStep(2), 180);
+}
+
+let igwzPostsLoaded = false;
+let igwzSelectedPostIds = {};
+
+async function igwzSelectScope(scope) {
+  igwzData.scope = scope;
+  document.getElementById('igwz-scope-all').classList.toggle('selected', scope === 'all');
+  document.getElementById('igwz-scope-specific').classList.toggle('selected', scope === 'specific');
+  const gridWrap = document.getElementById('igwz-post-grid-wrap');
+  if (scope === 'specific') {
+    gridWrap.style.display = 'block';
+    if (!igwzPostsLoaded) await igwzLoadPosts();
+  } else {
+    gridWrap.style.display = 'none';
+    igwzSelectedPostIds = {};
+    igwzData.post_ids = [];
+  }
+}
+
+async function igwzLoadPosts() {
+  const grid = document.getElementById('igwz-post-grid');
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:#6b7280;font-size:13px">Loading posts from @radikikk...</div>';
+  try {
+    const res = await fetch('/fb/instagram/ui/fetch-media');
+    const data = await res.json();
+    igwzPostsLoaded = true;
+    grid.innerHTML = '';
+    if (data.error) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:20px;color:#ef4444;font-size:13px">&#x26A0; ${data.error}</div>`;
+      return;
     }
-    
-    if (trigger === 'comment') {
-        if (commentReplyGroup) commentReplyGroup.style.display = 'block';
-    } else {
-        if (commentReplyGroup) commentReplyGroup.style.display = 'none';
+    const posts = data.posts || [];
+    if (posts.length === 0) {
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:#6b7280;font-size:13px">No Instagram posts found.</div>';
+      return;
     }
-}
-
-function toggleIgFlowOptions() {
-    const emailCheck = document.getElementById('ig-rule-email-capture').checked;
-    const followupCheck = document.getElementById('ig-rule-followup-check').checked;
-    
-    document.getElementById('ig-email-fields').style.display = emailCheck ? 'flex' : 'none';
-    document.getElementById('ig-followup-fields').style.display = followupCheck ? 'flex' : 'none';
-}
-
-async function saveIgRule() {
-    const name = document.getElementById('ig-rule-name').value.trim();
-    const trigger_type = document.getElementById('ig-rule-trigger').value;
-    const keywordsRaw = document.getElementById('ig-rule-keywords').value.trim();
-    const dm_message = document.getElementById('ig-rule-dm-msg').value.trim();
-    
-    const email_capture = document.getElementById('ig-rule-email-capture').checked;
-    const email_prompt = document.getElementById('ig-rule-email-prompt').value.trim();
-    const email_success_message = document.getElementById('ig-rule-email-success').value.trim();
-    
-    const has_followup = document.getElementById('ig-rule-followup-check').checked;
-    const follow_up_message = document.getElementById('ig-rule-followup-msg').value.trim();
-    const branch_yes_reply = document.getElementById('ig-rule-yes-branch').value.trim();
-    const branch_no_reply = document.getElementById('ig-rule-no-branch').value.trim();
-    
-    const delay_seconds = parseInt(document.getElementById('ig-rule-delay').value || '0');
-    const reply = document.getElementById('ig-rule-reply').value.trim();
-    
-    if (!name) return alert('Automation name is required.');
-    if (!dm_message) return alert('DM response message is required.');
-    
-    const keywords = keywordsRaw ? keywordsRaw.split(',').map(k => k.trim()) : [];
-    
-    const payload = {
-        name,
-        trigger_type,
-        keyword_type: keywords.length > 0 ? "any" : "all",
-        keywords,
-        scope: "all",
-        post_ids: [],
-        dm_message,
-        email_capture,
-        email_prompt,
-        email_success_message,
-        follow_up_message: has_followup ? follow_up_message : "",
-        branch_yes_reply: has_followup ? branch_yes_reply : "",
-        branch_no_reply: has_followup ? branch_no_reply : "",
-        delay_seconds,
-        reply,
-        active: true
-    };
-    
-    try {
-        let url = '/fb/ui/automations';
-        let method = 'POST';
-        if (editingIgRuleIdx !== null) {
-            url = `/fb/ui/automations/${editingIgRuleIdx}`;
-            method = 'PUT';
-        }
-        
-        const res = await fetch(url, {
-            method,
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (data.ok) {
-            closeIgModal();
-            loadIgRules();
+    posts.forEach(post => {
+      const isSelected = !!igwzSelectedPostIds[post.id];
+      const card = document.createElement('div');
+      card.style.cssText = `
+        position:relative;
+        border-radius:10px;
+        overflow:hidden;
+        cursor:pointer;
+        border:2px solid ${isSelected ? '#7c5cff' : 'rgba(255,255,255,0.08)'};
+        background:#1a1f35;
+        aspect-ratio:1;
+        transition:border-color 0.18s;
+      `;
+      card.id = 'igwz-post-' + post.id;
+      if (post.thumbnail) {
+        card.innerHTML = `
+          <img src="${post.thumbnail}" style="width:100%;height:100%;object-fit:cover;display:block" loading="lazy">
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:4px 6px;background:linear-gradient(transparent,rgba(0,0,0,0.7));font-size:10px;color:#fff;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${post.media_type === 'video' ? '&#x1F3AC; ' : '&#x1F4F7; '}${(post.message||'').substring(0,30)}</div>
+          <div class="igwz-post-check" id="chk-${post.id}" style="position:absolute;top:5px;right:5px;width:20px;height:20px;border-radius:50%;background:${isSelected?'#7c5cff':'rgba(0,0,0,0.5)'};border:2px solid ${isSelected?'#7c5cff':'rgba(255,255,255,0.4)'};display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;transition:all 0.18s">${isSelected?'&#x2713;':''}</div>
+        `;
+      } else {
+        card.innerHTML = `
+          <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:26px">${post.media_type === 'video' ? '&#x1F3AC;' : '&#x1F4F7;'}</div>
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:4px 6px;background:linear-gradient(transparent,rgba(0,0,0,0.7));font-size:10px;color:#fff;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${(post.message||'').substring(0,30)}</div>
+          <div class="igwz-post-check" id="chk-${post.id}" style="position:absolute;top:5px;right:5px;width:20px;height:20px;border-radius:50%;background:${isSelected?'#7c5cff':'rgba(0,0,0,0.5)'};border:2px solid ${isSelected?'#7c5cff':'rgba(255,255,255,0.4)'};display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;transition:all 0.18s">${isSelected?'&#x2713;':''}</div>
+        `;
+      }
+      card.onclick = () => {
+        if (igwzSelectedPostIds[post.id]) {
+          delete igwzSelectedPostIds[post.id];
+          card.style.borderColor = 'rgba(255,255,255,0.08)';
+          const chk = document.getElementById('chk-' + post.id);
+          if (chk) { chk.style.background='rgba(0,0,0,0.5)'; chk.style.borderColor='rgba(255,255,255,0.4)'; chk.innerHTML=''; }
         } else {
-            alert('Error saving rule: ' + data.error);
+          igwzSelectedPostIds[post.id] = post;
+          card.style.borderColor = '#7c5cff';
+          const chk = document.getElementById('chk-' + post.id);
+          if (chk) { chk.style.background='#7c5cff'; chk.style.borderColor='#7c5cff'; chk.innerHTML='&#x2713;'; }
         }
-    } catch(e) {
-        alert('Network error: ' + e.message);
-    }
+        igwzData.post_ids = Object.keys(igwzSelectedPostIds);
+        const count = igwzData.post_ids.length;
+        document.getElementById('igwz-post-count').textContent = count > 0 ? `${count} post${count>1?'s':''} selected` : '';
+      };
+      grid.appendChild(card);
+    });
+  } catch(err) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:20px;color:#ef4444;font-size:13px">&#x26A0; Failed to load: ${err.message}</div>`;
+  }
 }
+
+function igwzSelectTrigger(trigger) {
+  igwzData.trigger = trigger;
+  document.getElementById('igwz-trigger-any').classList.toggle('selected', trigger === 'all');
+  document.getElementById('igwz-trigger-kw').classList.toggle('selected', trigger === 'keyword');
+  document.getElementById('igwz-kw-section').style.display = trigger === 'keyword' ? 'block' : 'none';
+}
+
+function igwzAddKw() {
+  const input = document.getElementById('igwz-kw-input');
+  const val = input.value.trim();
+  if (val && !igwzData.keywords.includes(val)) {
+    igwzData.keywords.push(val);
+    igwzRenderKwTags();
+    input.value = '';
+  }
+}
+
+function igwzRemoveKw(idx) {
+  igwzData.keywords.splice(idx, 1);
+  igwzRenderKwTags();
+}
+
+function igwzRenderKwTags() {
+  const container = document.getElementById('igwz-kw-tags');
+  if (!container) return;
+  container.innerHTML = igwzData.keywords.map((k, i) =>
+    `<span class="igwz-kw-tag">${k}<button onclick="igwzRemoveKw(${i})">&times;</button></span>`
+  ).join('');
+}
+
+function igwzToggleReveal(revealId, checkboxId) {
+  const show = document.getElementById(checkboxId).checked;
+  document.getElementById(revealId).classList.toggle('show', show);
+}
+
+function igwzCheckStep2() {
+  const name = document.getElementById('igwz-name').value.trim();
+  document.getElementById('igwz-next').disabled = !name;
+}
+
+function igwzUpdatePreview() {
+  const body = document.getElementById('igwz-preview-body');
+  if (!body) return;
+
+  const dmMsg = document.getElementById('igwz-dm') ? document.getElementById('igwz-dm').value.trim() : igwzData.dmMessage;
+  const followPrompt = document.getElementById('igwz-follow-prompt') ? document.getElementById('igwz-follow-prompt').value.trim() : igwzData.followPrompt;
+  const emailPrompt = document.getElementById('igwz-email-prompt') ? document.getElementById('igwz-email-prompt').value.trim() : igwzData.emailPrompt;
+  const linkUrl = document.getElementById('igwz-link') ? document.getElementById('igwz-link').value.trim() : igwzData.linkUrl;
+  const askFollow = document.getElementById('igwz-ask-follow') ? document.getElementById('igwz-ask-follow').checked : igwzData.askFollow;
+  const collectEmail = document.getElementById('igwz-email') ? document.getElementById('igwz-email').checked : igwzData.emailCapture;
+  const publicReply = document.getElementById('igwz-public-reply') ? document.getElementById('igwz-public-reply').value.trim() : igwzData.publicReply;
+
+  // Public comment preview
+  const commentBlock = document.getElementById('igwz-prev-comment');
+  const hasComment = (igwzData.type === 'comment' || igwzData.type === 'live');
+  if (hasComment && publicReply) {
+    commentBlock.style.display = 'block';
+    document.getElementById('igwz-prev-comment-text').textContent = publicReply;
+  } else {
+    commentBlock.style.display = 'none';
+  }
+
+  let html = '<div class="igwz-bubble incoming">Trigger message...</div>';
+  if (askFollow && followPrompt) {
+    html += `<div class="igwz-bubble outgoing">${followPrompt}</div>`;
+  }
+  if (dmMsg) {
+    html += `<div class="igwz-bubble outgoing">${dmMsg}</div>`;
+  } else {
+    html += '<div class="igwz-bubble outgoing" style="opacity:0.4">Your DM message...</div>';
+  }
+  
+  if (igFollowUpSteps.length > 0 && igFollowUpSteps[0].advance_mode === 'on_tap' && igFollowUpSteps[0].button_label) {
+    html += `<div class="igwz-bubble link-btn" style="border-style:dashed; cursor:pointer;">👉 Tap: ${igFollowUpSteps[0].button_label}</div>`;
+  } else if (typeof spWizardButtons !== 'undefined' && spWizardButtons.length > 0) {
+    spWizardButtons.forEach(btn => {
+      if (btn.title) {
+        if (btn.url) {
+          const short = btn.url.replace('https://','').replace('http://','').substring(0, 22);
+          html += `<div class="igwz-bubble link-btn">🔗 ${btn.title} (${short})</div>`;
+        } else {
+          html += `<div class="igwz-bubble link-btn" style="border-style:dashed; cursor:pointer;">👉 Tap: ${btn.title}</div>`;
+        }
+      }
+    });
+  } else if (linkUrl) {
+    const short = linkUrl.replace('https://','').replace('http://','').substring(0, 25);
+    html += `<div class="igwz-bubble link-btn">&#x1F517; ${short}...</div>`;
+  }
+  if (collectEmail && emailPrompt) {
+    html += `<div class="igwz-bubble outgoing">${emailPrompt}</div>`;
+  }
+  
+  igFollowUpSteps.forEach((step, idx) => {
+    if (step.message) {
+      if (step.advance_mode === 'on_tap') {
+        html += `<div style="font-size:10px; color:#f59e0b; margin:6px 0; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px;">👆 waits for user to tap "${step.button_label || 'button'}"</div>`;
+      } else {
+        html += `<div style="font-size:10px; color:#8b5cf6; margin:6px 0; text-align:center; display:flex; align-items:center; justify-content:center; gap:4px;">⏱️ auto-advances after ${step.delay_seconds || 60}s</div>`;
+      }
+      
+      html += `<div class="igwz-bubble outgoing" style="background:rgba(124,92,245,0.15); border: 1px solid rgba(124,92,245,0.4); color: #c084fc;">${step.message}</div>`;
+      
+      if (step.link_url) {
+        const short = step.link_url.replace('https://','').replace('http://','').substring(0, 20);
+        html += `<div class="igwz-bubble link-btn">🔗 ${step.link_button_label || 'Open Link'} (${short})</div>`;
+      } else if (idx + 1 < igFollowUpSteps.length && igFollowUpSteps[idx + 1].advance_mode === 'on_tap' && igFollowUpSteps[idx + 1].button_label) {
+        html += `<div class="igwz-bubble link-btn" style="border-style:dashed; cursor:pointer;">👉 Tap: ${igFollowUpSteps[idx + 1].button_label}</div>`;
+      }
+    }
+  });
+  
+  body.innerHTML = html;
+}
+
+function igwzBack() {
+  if (igwzStep > 1) igwzGoToStep(igwzStep - 1);
+}
+
+async function igwzNext() {
+  if (igwzStep === 1) {
+    if (!igwzData.type) return alert('Please select an automation type.');
+    igwzGoToStep(2);
+  } else if (igwzStep === 2) {
+    const name = document.getElementById('igwz-name').value.trim();
+    if (!name) return alert('Please enter an automation name.');
+    igwzData.name = name;
+    if (igwzData.trigger === 'keyword' && igwzData.keywords.length === 0) return alert('Please add at least one keyword.');
+    
+    const replyToggle = document.getElementById('sp-public-reply-toggle').checked;
+    igwzData.publicReply = replyToggle ? document.getElementById('igwz-public-reply').value.trim() : '';
+    
+    igwzGoToStep(3);
+  } else if (igwzStep === 3) {
+    const dm = document.getElementById('igwz-dm').value.trim();
+    if (!dm) return alert('Please enter the initial DM message.');
+    igwzData.dmMessage = dm;
+    
+    igwzData.askFollow = document.getElementById('sp-ask-follow').checked;
+    igwzData.followPrompt = document.getElementById('sp-follow-prompt').value.trim();
+    igwzData.emailCapture = document.getElementById('sp-email').checked;
+    igwzData.emailPrompt = document.getElementById('sp-email-prompt').value.trim();
+    
+    const dmType = document.getElementById('sp-dm-type').value;
+    if (dmType === 'text_button') {
+      igwzData.buttonEnabled = true;
+      // Validate buttons list
+      const validBtns = spWizardButtons.filter(b => b.title && b.title.trim());
+      if (validBtns.length === 0) return alert('Please add at least one button with a title.');
+      // enforce 20-char limit on each title
+      validBtns.forEach(b => { b.title = b.title.trim().substring(0, 20); });
+      igwzData.buttons = validBtns;
+      // Legacy compat fields (keep for older automations that read them)
+      igwzData.buttonLabel = validBtns[0].title;
+      igwzData.linkButtonLabel = validBtns[0].title;
+      igwzData.linkUrl = validBtns[0].url || '';
+    } else {
+      igwzData.buttonEnabled = false;
+      igwzData.buttons = [];
+      igwzData.buttonLabel = '';
+      igwzData.linkButtonLabel = '';
+      igwzData.linkUrl = '';
+    }
+    
+    const delayVal = parseFloat(document.getElementById('sp-delay-val').value) || 0;
+    const delayUnit = document.getElementById('sp-delay-unit').value;
+    let delaySecs = delayVal;
+    if (delayUnit === 'minutes') delaySecs = delayVal * 60;
+    else if (delayUnit === 'hours') delaySecs = delayVal * 3600;
+    igwzData.delaySeconds = Math.round(delaySecs);
+    
+    // Set preview summaries
+    const thumbEl = document.getElementById('sp-preview-post-thumb');
+    const headerEl = document.getElementById('sp-preview-post-header');
+    const descEl = document.getElementById('sp-preview-post-desc');
+    const triggerEl = document.getElementById('sp-preview-trigger-text');
+    const delayEl = document.getElementById('sp-preview-delay-text');
+    
+    if (igwzData.scope === 'specific') {
+      headerEl.textContent = 'comments on this specific post';
+      descEl.textContent = `${igwzData.post_ids.length} Selected post(s)`;
+      if (igwzData.post_ids.length > 0 && thumbEl) {
+        const firstId = igwzData.post_ids[0];
+        const ruleIndex = igRules.findIndex(r => r.post_ids && r.post_ids.includes(firstId));
+        if (ruleIndex !== -1 && igRules[ruleIndex].thumbnail) {
+          thumbEl.src = igRules[ruleIndex].thumbnail;
+          thumbEl.style.display = 'block';
+        } else {
+          // Check DOM
+          const imgCard = document.querySelector(`.igwz-post-card[style*="border-color"] img`);
+          if (imgCard) {
+            thumbEl.src = imgCard.src;
+            thumbEl.style.display = 'block';
+          } else {
+            thumbEl.style.display = 'none';
+          }
+        }
+      }
+    } else {
+      headerEl.textContent = 'comments on your Post/Reel';
+      descEl.textContent = 'All Posts & Reels';
+      if (thumbEl) thumbEl.style.display = 'none';
+    }
+    
+    triggerEl.textContent = igwzData.trigger === 'keyword' ? 'Specific keyword: ' + igwzData.keywords.join(', ') : 'Any comment';
+    delayEl.textContent = `⏱️ then wait ${delayVal} ${delayUnit} after the trigger`;
+    
+    igwzGoToStep(4);
+  } else if (igwzStep === 4) {
+    const hasComment = (igwzData.type === 'comment' || igwzData.type === 'live');
+    const payload = {
+      name: igwzData.name,
+      trigger_type: igwzData.type,
+      keyword_type: igwzData.trigger === 'keyword' ? 'specific' : 'any',
+      keywords: igwzData.trigger === 'keyword' ? igwzData.keywords : [],
+      scope: igwzData.scope,
+      post_ids: igwzData.post_ids || [],
+      dm_message: igwzData.dmMessage,
+      reply: hasComment ? igwzData.publicReply : '',
+      action: hasComment ? (igwzData.publicReply ? 'both' : 'dm') : 'dm',
+      ask_follow: igwzData.askFollow,
+      follow_prompt: igwzData.followPrompt,
+      email_capture: igwzData.emailCapture,
+      email_prompt: igwzData.emailPrompt,
+      button_enabled: igwzData.buttonEnabled ? 1 : 0,
+      button_label: igwzData.buttonLabel,
+      link_button_label: igwzData.linkButtonLabel,
+      link_url: igwzData.linkUrl,
+      buttons: igwzData.buttons || [],
+      delay_seconds: igwzData.delaySeconds,
+      follow_up_steps: igFollowUpSteps,
+      active: true
+    };
+    try {
+      let url = '/fb/instagram/ui/automations';
+      let method = 'POST';
+      if (editingIgRuleIdx !== null) {
+        url = `/fb/instagram/ui/automations/${editingIgRuleIdx}`;
+        method = 'PUT';
+      }
+      const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (data.ok) {
+        closeIgModal();
+        loadIgRules();
+      } else {
+        alert('Error saving rule: ' + (data.error || 'Unknown error'));
+      }
+    } catch(e) {
+      alert('Network error: ' + e.message);
+    }
+  }
+}
+
 
 async function deleteIgRule(idx) {
     if (!confirm('Are you sure you want to delete this Instagram automation rule?')) return;
     try {
-        const res = await fetch(`/fb/ui/automations/${idx}`, { method: 'DELETE' });
+        const res = await fetch(`/fb/instagram/ui/automations/${idx}`, { method: 'DELETE' });
         const data = await res.json();
         if (data.ok) {
             loadIgRules();
@@ -1808,21 +2746,337 @@ async function loadIgAnalytics() {
         
         const followersEl = document.getElementById('stat-sp-followers');
         const dmsEl = document.getElementById('stat-sp-dms');
+        const emailsEl = document.getElementById('stat-sp-emails');
         
-        if (followersEl) followersEl.textContent = formatNumberWithK(data.follower_count || 42510);
+        if (followersEl) followersEl.textContent = formatNumberWithK(data.follower_count || 0);
         
-        const success = data.total_success_dms || 78320;
+        const success = data.total_success_dms || 0;
         if (dmsEl) dmsEl.textContent = formatNumberWithK(success);
+        
+        const leads = (data.funnel && data.funnel.total_leads_captured) || 0;
+        if (emailsEl) emailsEl.textContent = formatNumberWithK(leads);
     } catch(e) {
         console.error('Failed to load insights:', e);
     }
-    
+}
+
+async function resetIgStats() {
+    if (!confirm('Are you sure you want to reset all analytics and counters to 0?')) return;
     try {
-        const res = await fetch('/fb/instagram/ui/leads');
-        const leads = await res.json();
-    } catch (e) {
-        console.error('Failed to load leads list:', e);
+        const res = await fetch('/fb/instagram/ui/stats/reset', { method: 'POST' });
+        const data = await res.json();
+        if (data.ok) {
+            alert('Stats reset successfully.');
+            loadIgRules();
+            loadIgAnalytics();
+        } else {
+            alert('Failed to reset stats.');
+        }
+    } catch(e) {
+        alert('Error: ' + e.message);
     }
+}
+
+function renderIgFollowUpSteps() {
+  const container = document.getElementById('igwz-steps-container');
+  if (!container) return;
+  container.innerHTML = '';
+  
+  igFollowUpSteps.forEach((step, idx) => {
+    const card = document.createElement('div');
+    card.className = 'igwz-step-card';
+    card.style = 'background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:10px; position:relative;';
+    
+    // Header row
+    const header = document.createElement('div');
+    header.style = 'display:flex; justify-content:space-between; align-items:center;';
+    header.innerHTML = `
+      <strong style="color:#a78bfa; font-size:12.5px;">Step ${idx + 1}</strong>
+      <button type="button" onclick="removeIgFollowUpStep(${idx})" style="background:none; border:none; color:#ef4444; font-size:11.5px; cursor:pointer; font-weight:600;">Remove</button>
+    `;
+    card.appendChild(header);
+    
+    // Message
+    const msgField = document.createElement('div');
+    msgField.innerHTML = `
+      <label class="igwz-label">Follow-up Message</label>
+      <textarea class="igwz-input step-message" rows="2" placeholder="Enter follow-up message..." oninput="updateStepData(${idx}, 'message', this.value); igwzUpdatePreview();" style="width:100%; font-size:13px; margin-bottom: 0;">${step.message || ''}</textarea>
+    `;
+    card.appendChild(msgField);
+    
+    // Advance mode row
+    const advRow = document.createElement('div');
+    advRow.style = 'display:flex; gap:10px; align-items:flex-end;';
+    
+    const modeSelectCol = document.createElement('div');
+    modeSelectCol.style = 'flex:1;';
+    modeSelectCol.innerHTML = `
+      <label class="igwz-label">Advance Mode</label>
+      <select class="igwz-input step-advance-mode" onchange="updateStepData(${idx}, 'advance_mode', this.value); toggleStepFields(${idx}); igwzUpdatePreview();" style="width:100%; padding:6px 10px; font-size:13px; height:36px; border-radius:8px;">
+        <option value="auto" ${step.advance_mode === 'auto' ? 'selected' : ''}>Auto-advance after delay</option>
+        <option value="on_tap" ${step.advance_mode === 'on_tap' ? 'selected' : ''}>Wait for button tap</option>
+      </select>
+    `;
+    advRow.appendChild(modeSelectCol);
+    
+    const delayCol = document.createElement('div');
+    delayCol.id = `step-delay-wrap-${idx}`;
+    delayCol.style = `flex:1; display: ${step.advance_mode === 'on_tap' ? 'none' : 'block'}`;
+    delayCol.innerHTML = `
+      <label class="igwz-label">Delay (seconds)</label>
+      <input type="number" class="igwz-input step-delay" value="${step.delay_seconds || 60}" min="1" oninput="updateStepData(${idx}, 'delay_seconds', parseInt(this.value) || 60)" style="width:100%; padding:6px 10px; font-size:13px; height:36px; border-radius:8px;">
+    `;
+    advRow.appendChild(delayCol);
+    
+    const btnCol = document.createElement('div');
+    btnCol.id = `step-button-label-wrap-${idx}`;
+    btnCol.style = `flex:1; display: ${step.advance_mode === 'on_tap' ? 'block' : 'none'}`;
+    btnCol.innerHTML = `
+      <label class="igwz-label">Button Label (max 20 chars)</label>
+      <input type="text" class="igwz-input step-button-label" value="${step.button_label || ''}" maxlength="20" placeholder="e.g. Next Info" oninput="updateStepData(${idx}, 'button_label', this.value); igwzUpdatePreview();" style="width:100%; padding:6px 10px; font-size:13px; height:36px; border-radius:8px;">
+    `;
+    advRow.appendChild(btnCol);
+    
+    card.appendChild(advRow);
+    
+    // Link row
+    const linkRow = document.createElement('div');
+    linkRow.style = 'display:flex; gap:10px;';
+    
+    const linkCol = document.createElement('div');
+    linkCol.style = 'flex:1;';
+    linkCol.innerHTML = `
+      <label class="igwz-label">Link URL (optional)</label>
+      <input type="url" class="igwz-input step-link-url" value="${step.link_url || ''}" placeholder="https://..." oninput="updateStepData(${idx}, 'link_url', this.value); toggleStepLinkNote(${idx}); igwzUpdatePreview();" style="width:100%; padding:6px 10px; font-size:13px; height:36px; border-radius:8px;">
+    `;
+    linkRow.appendChild(linkCol);
+    
+    const linkBtnCol = document.createElement('div');
+    linkBtnCol.style = 'flex:1;';
+    linkBtnCol.innerHTML = `
+      <label class="igwz-label">Link Button Label (optional)</label>
+      <input type="text" class="igwz-input step-link-btn-label" value="${step.link_button_label || ''}" maxlength="20" placeholder="e.g. Open Link" oninput="updateStepData(${idx}, 'link_button_label', this.value); igwzUpdatePreview();" style="width:100%; padding:6px 10px; font-size:13px; height:36px; border-radius:8px;">
+    `;
+    linkRow.appendChild(linkBtnCol);
+    
+    card.appendChild(linkRow);
+    
+    // Note block
+    const note = document.createElement('div');
+    note.id = `step-link-note-${idx}`;
+    note.style = `font-size:11px; color:#10b981; margin-top:2px; display: ${step.link_url ? 'block' : 'none'}`;
+    note.textContent = 'ℹ️ This step will render as a clickable link button.';
+    card.appendChild(note);
+    
+    container.appendChild(card);
+  });
+}
+
+function updateStepData(idx, key, val) {
+  if (igFollowUpSteps[idx]) {
+    igFollowUpSteps[idx][key] = val;
+  }
+}
+
+function addIgFollowUpStep() {
+  igFollowUpSteps.push({
+    message: '',
+    advance_mode: 'auto',
+    delay_seconds: 60,
+    button_label: '',
+    link_url: '',
+    link_button_label: ''
+  });
+  renderIgFollowUpSteps();
+  igwzUpdatePreview();
+}
+
+function removeIgFollowUpStep(idx) {
+  igFollowUpSteps.splice(idx, 1);
+  renderIgFollowUpSteps();
+  igwzUpdatePreview();
+}
+
+function toggleStepFields(idx) {
+  const step = igFollowUpSteps[idx];
+  if (!step) return;
+  const delayWrap = document.getElementById(`step-delay-wrap-${idx}`);
+  const btnWrap = document.getElementById(`step-button-label-wrap-${idx}`);
+  if (step.advance_mode === 'on_tap') {
+    if (delayWrap) delayWrap.style.display = 'none';
+    if (btnWrap) btnWrap.style.display = 'block';
+  } else {
+    if (delayWrap) delayWrap.style.display = 'block';
+    if (btnWrap) btnWrap.style.display = 'none';
+  }
+}
+
+function toggleStepLinkNote(idx) {
+  const step = igFollowUpSteps[idx];
+  if (!step) return;
+  const note = document.getElementById(`step-link-note-${idx}`);
+  if (note) {
+    note.style.display = step.link_url ? 'block' : 'none';
+  }
+}
+
+// Superprofile custom helper functions
+function spSelectTriggerMode(mode) {
+  igwzData.trigger = mode;
+  const kwBtn = document.getElementById('sp-trigger-kw-btn');
+  const anyBtn = document.getElementById('sp-trigger-any-btn');
+  const kwSection = document.getElementById('sp-kw-section');
+  
+  if (mode === 'keyword') {
+    kwBtn.classList.add('active');
+    anyBtn.classList.remove('active');
+    kwSection.style.display = 'block';
+  } else {
+    kwBtn.classList.remove('active');
+    anyBtn.classList.add('active');
+    kwSection.style.display = 'none';
+  }
+  igwzUpdatePreview();
+}
+
+function toggleSpPublicReplyField() {
+  const show = document.getElementById('sp-public-reply-toggle').checked;
+  document.getElementById('sp-public-reply-field-reveal').style.display = show ? 'block' : 'none';
+  igwzUpdatePreview();
+}
+
+function spUpdateDelaySeconds() {
+  const val = parseFloat(document.getElementById('sp-delay-val').value) || 0;
+  const unit = document.getElementById('sp-delay-unit').value;
+  const preview = document.getElementById('sp-delay-preview-text');
+  
+  let unitText = unit;
+  if (val === 1) {
+    unitText = unit.slice(0, -1);
+  }
+  
+  if (preview) {
+    preview.textContent = `${val} ${unitText}`;
+  }
+}
+
+function toggleSpDMTypeFields() {
+  const val = document.getElementById('sp-dm-type').value;
+  const section = document.getElementById('sp-button-builder-section');
+  if (val === 'text_button') {
+    section.style.display = 'block';
+    spRenderWizardButtons();
+  } else {
+    section.style.display = 'none';
+  }
+}
+
+function spUpdateDMCharCounter() {
+  const textarea = document.getElementById('igwz-dm');
+  const counter = document.getElementById('sp-dm-char-count');
+  if (textarea && counter) {
+    counter.textContent = `${textarea.value.length}/900`;
+  }
+}
+
+// ── Multi-button wizard helpers ──────────────────────────────
+let spWizardButtons = [];
+
+function spRenderWizardButtons() {
+  const container = document.getElementById('sp-buttons-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (spWizardButtons.length === 0) {
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'igwz-kw-add';
+    addBtn.style.cssText = 'width:100%;padding:10px;font-size:13px;border-radius:8px;margin-top:4px;';
+    addBtn.textContent = '+ Add a button';
+    addBtn.onclick = spAddWizardButton;
+    container.appendChild(addBtn);
+    return;
+  }
+
+  spWizardButtons.forEach((btn, idx) => {
+    const card = document.createElement('div');
+    card.className = 'sp-btn-card';
+    card.style.cssText = 'background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.15);border-radius:10px;padding:12px;position:relative;margin-bottom:4px;';
+
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:12px;font-weight:600;color:#c4b5fd;">Button #${idx + 1}</span>
+        <button type="button" onclick="spRemoveWizardButton(${idx})"
+          style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#ef4444;font-size:11px;cursor:pointer;padding:2px 7px;border-radius:5px;">
+          ✕ Remove
+        </button>
+      </div>
+      <div class="igwz-field" style="margin-bottom:8px;">
+        <input type="text" class="igwz-input" value="${btn.title || ''}"
+          placeholder="Button Title (e.g. Claim Now!)" maxlength="20"
+          oninput="spUpdateWizardButtonData(${idx},'title',this.value);spUpdateWizardButtonCharCounter(${idx},this.value.length);igwzUpdatePreview();"
+          style="margin-bottom:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:10px;color:#6b7280;">Max 20 chars (Meta limit)</span>
+          <span id="sp-wz-btn-cnt-${idx}" style="font-size:10px;color:#6b7280;">${(btn.title||'').length}/20</span>
+        </div>
+      </div>
+      <div class="igwz-field" style="margin-bottom:0;">
+        <input type="url" class="igwz-input" value="${btn.url || ''}"
+          placeholder="🔗 Paste link here (optional)"
+          oninput="spUpdateWizardButtonData(${idx},'url',this.value);igwzUpdatePreview();"
+          style="margin-bottom:0;">
+      </div>`;
+    container.appendChild(card);
+  });
+
+  if (spWizardButtons.length < 3) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'igwz-kw-add';
+    more.style.cssText = 'width:100%;padding:8px;font-size:12px;border-radius:8px;margin-top:8px;';
+    more.textContent = '+ Add another button';
+    more.onclick = spAddWizardButton;
+    container.appendChild(more);
+  }
+}
+
+function spAddWizardButton() {
+  if (spWizardButtons.length >= 3) { alert('Meta allows a maximum of 3 buttons.'); return; }
+  spWizardButtons.push({ title: '', url: '' });
+  spRenderWizardButtons();
+  igwzUpdatePreview();
+}
+
+function spRemoveWizardButton(idx) {
+  spWizardButtons.splice(idx, 1);
+  spRenderWizardButtons();
+  igwzUpdatePreview();
+}
+
+function spUpdateWizardButtonData(idx, key, val) {
+  if (spWizardButtons[idx]) spWizardButtons[idx][key] = val;
+}
+
+function spUpdateWizardButtonCharCounter(idx, len) {
+  const el = document.getElementById(`sp-wz-btn-cnt-${idx}`);
+  if (el) el.textContent = `${len}/20`;
+}
+
+// Legacy no-op kept for safety (old callers)
+function spUpdateButtonCharCounter() {}
+
+function spInsertVariable(v) {
+  const textarea = document.getElementById('igwz-dm');
+  if (!textarea) return;
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const text = textarea.value;
+  textarea.value = text.substring(0, start) + v + text.substring(end);
+  textarea.focus();
+  textarea.selectionStart = textarea.selectionEnd = start + v.length;
+  spUpdateDMCharCounter();
+  igwzUpdatePreview();
 }
 
 // Automatically load username on startup if saved
@@ -1839,5 +3093,4 @@ document.addEventListener('DOMContentLoaded', () => {
     loadBioPageSettings();
 });
 </script>
-</body>
 </html>

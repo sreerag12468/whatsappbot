@@ -138,7 +138,18 @@ def init_sqlite_db():
         ask_follow INTEGER,
         follow_prompt TEXT,
         email_capture INTEGER,
-        email_prompt TEXT
+        email_capture INTEGER,
+        email_prompt TEXT,
+        total_runs INTEGER DEFAULT 0,
+        dms_sent INTEGER DEFAULT 0,
+        replies_sent INTEGER DEFAULT 0,
+        follow_gate_conversions INTEGER DEFAULT 0,
+        button_enabled INTEGER DEFAULT 0,
+        button_label TEXT,
+        button_follow_up_message TEXT,
+        link_button_label TEXT,
+        follow_up_steps TEXT,
+        buttons TEXT
     );
     CREATE TABLE IF NOT EXISTS ig_leads (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -212,6 +223,37 @@ def init_sqlite_db():
     );
     """
     db_execute_script(schema)
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(ig_automations)")
+            cols = [c[1] for c in cursor.fetchall()]
+            if "total_runs" not in cols:
+                cursor.execute("ALTER TABLE ig_automations ADD COLUMN total_runs INTEGER DEFAULT 0")
+            if "dms_sent" not in cols:
+                cursor.execute("ALTER TABLE ig_automations ADD COLUMN dms_sent INTEGER DEFAULT 0")
+            if "replies_sent" not in cols:
+                cursor.execute("ALTER TABLE ig_automations ADD COLUMN replies_sent INTEGER DEFAULT 0")
+            if "follow_gate_conversions" not in cols:
+                cursor.execute("ALTER TABLE ig_automations ADD COLUMN follow_gate_conversions INTEGER DEFAULT 0")
+            if "button_enabled" not in cols:
+                cursor.execute("ALTER TABLE ig_automations ADD COLUMN button_enabled INTEGER DEFAULT 0")
+            if "button_label" not in cols:
+                cursor.execute("ALTER TABLE ig_automations ADD COLUMN button_label TEXT")
+            if "button_follow_up_message" not in cols:
+                cursor.execute("ALTER TABLE ig_automations ADD COLUMN button_follow_up_message TEXT")
+            if "link_button_label" not in cols:
+                cursor.execute("ALTER TABLE ig_automations ADD COLUMN link_button_label TEXT")
+            if "follow_up_steps" not in cols:
+                cursor.execute("ALTER TABLE ig_automations ADD COLUMN follow_up_steps TEXT")
+            if "buttons" not in cols:
+                cursor.execute("ALTER TABLE ig_automations ADD COLUMN buttons TEXT")
+            conn.commit()
+        except Exception as e:
+            print(f"[Migration Error] ig_automations columns: {e}")
+        finally:
+            conn.close()
     _migrate_legacy_json_files()
 
 def _migrate_legacy_json_files():
@@ -836,7 +878,18 @@ def load_ig_automations():
                 "ask_follow": bool(r["ask_follow"]),
                 "follow_prompt": r["follow_prompt"],
                 "email_capture": bool(r["email_capture"]),
-                "email_prompt": r["email_prompt"]
+                "email_prompt": r["email_prompt"],
+                "total_runs": r["total_runs"] if "total_runs" in r.keys() else 0,
+                "dms_sent": r["dms_sent"] if "dms_sent" in r.keys() else 0,
+                "replies_sent": r["replies_sent"] if "replies_sent" in r.keys() else 0,
+                "follow_gate_conversions": r["follow_gate_conversions"] if "follow_gate_conversions" in r.keys() else 0,
+                "button_enabled": bool(r["button_enabled"]) if "button_enabled" in r.keys() else False,
+                "button_label": r["button_label"] if "button_label" in r.keys() else "",
+                "button_follow_up_message": r["button_follow_up_message"] if "button_follow_up_message" in r.keys() else "",
+                "link_button_label": r["link_button_label"] if "link_button_label" in r.keys() else "",
+                "follow_up_steps": json.loads(r["follow_up_steps"] or "[]") if "follow_up_steps" in r.keys() else [],
+                "buttons": json.loads(r["buttons"] or "[]") if "buttons" in r.keys() else [],
+                "id": r["id"] if "id" in r.keys() else None
             })
         return rules
     except Exception as e:
@@ -853,7 +906,7 @@ def save_ig_automations(data):
             cursor.execute("DELETE FROM ig_automations")
             for rule in data:
                 cursor.execute(
-                    "INSERT INTO ig_automations (name, reply, action, dm_message, trigger_type, scope, post_ids, thumbnail, keyword_type, keywords, active, delay_seconds, link_url, follow_up_message, ask_follow, follow_prompt, email_capture, email_prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO ig_automations (name, reply, action, dm_message, trigger_type, scope, post_ids, thumbnail, keyword_type, keywords, active, delay_seconds, link_url, follow_up_message, ask_follow, follow_prompt, email_capture, email_prompt, total_runs, dms_sent, replies_sent, follow_gate_conversions, button_enabled, button_label, button_follow_up_message, link_button_label, follow_up_steps, buttons) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         rule.get("name"),
                         rule.get("reply"),
@@ -872,7 +925,17 @@ def save_ig_automations(data):
                         1 if rule.get("ask_follow") else 0,
                         rule.get("follow_prompt"),
                         1 if rule.get("email_capture") else 0,
-                        rule.get("email_prompt")
+                        rule.get("email_prompt"),
+                        rule.get("total_runs") or 0,
+                        rule.get("dms_sent") or 0,
+                        rule.get("replies_sent") or 0,
+                        rule.get("follow_gate_conversions") or 0,
+                        1 if rule.get("button_enabled") else 0,
+                        (rule.get("button_label") or "")[:20],
+                        rule.get("button_follow_up_message"),
+                        (rule.get("link_button_label") or "")[:20],
+                        json.dumps(rule.get("follow_up_steps") or []),
+                        json.dumps(rule.get("buttons") or [])
                     )
                 )
             conn.commit()
@@ -880,6 +943,91 @@ def save_ig_automations(data):
             print(f"Error saving IG automations: {e}")
         finally:
             conn.close()
+
+def increment_ig_automation_counter(name, column_name):
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"UPDATE ig_automations SET {column_name} = {column_name} + 1 WHERE name = ?",
+                (name,)
+            )
+            conn.commit()
+        except Exception as e:
+            print(f"[Counter error] Failed to increment {column_name} for {name}: {e}")
+        finally:
+            conn.close()
+
+def get_ig_automation_by_id(auto_id):
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM ig_automations WHERE id = ?", (auto_id,))
+        r = cursor.fetchone()
+        if r:
+            return {
+                "id": r["id"],
+                "name": r["name"],
+                "reply": r["reply"],
+                "action": r["action"],
+                "dm_message": r["dm_message"],
+                "trigger_type": r["trigger_type"],
+                "scope": r["scope"],
+                "post_ids": json.loads(r["post_ids"] or "[]"),
+                "thumbnail": r["thumbnail"],
+                "keyword_type": r["keyword_type"],
+                "keywords": json.loads(r["keywords"] or "[]"),
+                "active": bool(r["active"]),
+                "delay_seconds": r["delay_seconds"],
+                "link_url": r["link_url"],
+                "follow_up_message": r["follow_up_message"],
+                "ask_follow": bool(r["ask_follow"]),
+                "follow_prompt": r["follow_prompt"],
+                "email_capture": bool(r["email_capture"]),
+                "email_prompt": r["email_prompt"],
+                "total_runs": r["total_runs"] if "total_runs" in r.keys() else 0,
+                "dms_sent": r["dms_sent"] if "dms_sent" in r.keys() else 0,
+                "replies_sent": r["replies_sent"] if "replies_sent" in r.keys() else 0,
+                "follow_gate_conversions": r["follow_gate_conversions"] if "follow_gate_conversions" in r.keys() else 0,
+                "button_enabled": bool(r["button_enabled"]) if "button_enabled" in r.keys() else False,
+                "button_label": r["button_label"] if "button_label" in r.keys() else "",
+                "button_follow_up_message": r["button_follow_up_message"] if "button_follow_up_message" in r.keys() else "",
+                "link_button_label": r["link_button_label"] if "link_button_label" in r.keys() else "",
+                "follow_up_steps": json.loads(r["follow_up_steps"] or "[]") if "follow_up_steps" in r.keys() else []
+            }
+    except Exception as e:
+        print(f"Error loading IG automation by id {auto_id}: {e}")
+    finally:
+        conn.close()
+    return None
+
+def increment_ig_automation_counter_by_id(auto_id, column_name):
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"UPDATE ig_automations SET {column_name} = {column_name} + 1 WHERE id = ?",
+                (auto_id,)
+            )
+            conn.commit()
+        except Exception as e:
+            print(f"[Counter error] Failed to increment {column_name} for id {auto_id}: {e}")
+        finally:
+            conn.close()
+
+def queue_ig_follow_up_task(recipient_id, auto_id, step_index, delay):
+    queue = load_ig_messages_queue()
+    queue.append({
+        "recipient_id": recipient_id,
+        "is_follow_up": True,
+        "auto_id": auto_id,
+        "step_index": step_index,
+        "queued_at": time.time(),
+        "delay": delay
+    })
+    save_ig_messages_queue(queue)
 
 def load_ig_stats():
     conn = get_db_conn()
@@ -936,7 +1084,7 @@ def ig_already_replied(key):
     conn = get_db_conn()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT 1 FROM ig_messages_log WHERE comment_id = ?", (key,))
+        cursor.execute("SELECT 1 FROM ig_replied WHERE comment_id = ?", (key,))
         return cursor.fetchone() is not None
     except Exception:
         return False
@@ -948,7 +1096,7 @@ def ig_mark_replied(key):
         conn = get_db_conn()
         try:
             cursor = conn.cursor()
-            cursor.execute("INSERT OR REPLACE INTO ig_messages_log (comment_id, timestamp, success) VALUES (?, ?, 1)", (key, time.time()))
+            cursor.execute("INSERT OR REPLACE INTO ig_replied (comment_id, timestamp) VALUES (?, ?)", (key, time.time()))
             conn.commit()
         except Exception as e:
             print(f"Error marking replied: {e}")
@@ -1015,9 +1163,17 @@ def load_ig_messages_log():
     conn = get_db_conn()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT comment_id, timestamp, success FROM ig_messages_log")
+        cursor.execute("SELECT recipient_id, text, status, sent_at, is_automated, is_private_reply, automation_name FROM ig_messages_log")
         rows = cursor.fetchall()
-        return [{"comment_id": r["comment_id"], "timestamp": r["timestamp"], "success": bool(r["success"])} for r in rows]
+        return [{
+            "recipient_id": r["recipient_id"],
+            "text": r["text"],
+            "status": r["status"],
+            "sent_at": r["sent_at"],
+            "is_automated": bool(r["is_automated"]),
+            "is_private_reply": bool(r["is_private_reply"]),
+            "automation_name": r["automation_name"]
+        } for r in rows]
     except Exception as e:
         print(f"Error loading message logs: {e}")
         return []
@@ -1032,8 +1188,16 @@ def save_ig_messages_log(data):
             cursor.execute("DELETE FROM ig_messages_log")
             for entry in data:
                 cursor.execute(
-                    "INSERT OR REPLACE INTO ig_messages_log (comment_id, timestamp, success) VALUES (?, ?, ?)",
-                    (entry.get("comment_id"), entry.get("timestamp"), 1 if entry.get("success") else 0)
+                    "INSERT INTO ig_messages_log (recipient_id, text, status, sent_at, is_automated, is_private_reply, automation_name) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        entry.get("recipient_id"),
+                        entry.get("text"),
+                        entry.get("status"),
+                        entry.get("sent_at"),
+                        1 if entry.get("is_automated") else 0,
+                        1 if entry.get("is_private_reply") else 0,
+                        entry.get("automation_name")
+                    )
                 )
             conn.commit()
         except Exception as e:
@@ -1875,7 +2039,7 @@ def get_last_user_interaction_time(user_id):
     interactions = load_ig_user_interactions()
     return interactions.get(str(user_id))
 
-def queue_ig_message(recipient_id, text, comment_id=None, is_private_reply=False, automation_name=None, delay=0, quick_replies=None):
+def queue_ig_message(recipient_id, text, comment_id=None, is_private_reply=False, automation_name=None, delay=0, quick_replies=None, buttons=None):
     queue = load_ig_messages_queue()
     queue.append({
         "recipient_id": recipient_id,
@@ -1885,7 +2049,8 @@ def queue_ig_message(recipient_id, text, comment_id=None, is_private_reply=False
         "automation_name": automation_name or "manual",
         "queued_at": time.time(),
         "delay": delay,
-        "quick_replies": quick_replies
+        "quick_replies": quick_replies,
+        "buttons": buttons
     })
     save_ig_messages_queue(queue)
     print(f"[Queue] Queued message to {recipient_id}: {text[:30]}...", flush=True)
@@ -1914,7 +2079,7 @@ def perform_ig_dm_send_with_buttons(user_id, text, quick_replies_list, tag=None)
             json_payload["messaging_type"] = "MESSAGE_TAG"
             
         resp = requests.post(
-            f"{GRAPH_URL}/{IG_USER_ID}/messages",
+            f"{GRAPH_URL}/me/messages",
             params={"access_token": PAGE_ACCESS_TOKEN},
             json=json_payload,
             timeout=8,
@@ -1992,7 +2157,7 @@ def perform_ig_private_reply_send(comment_id, message) -> tuple[bool, str]:
         return False, "Daily DM cap reached"
     try:
         resp = requests.post(
-            f"{GRAPH_URL}/{IG_USER_ID}/messages",
+            f"{GRAPH_URL}/me/messages",
             params={"access_token": PAGE_ACCESS_TOKEN},
             json={"recipient": {"comment_id": comment_id}, "message": {"text": message}},
             timeout=8,
@@ -2018,7 +2183,7 @@ def perform_ig_dm_send(user_id, message, tag=None) -> tuple[bool, str]:
             json_payload["tag"] = tag
             json_payload["messaging_type"] = "MESSAGE_TAG"
         resp = requests.post(
-            f"{GRAPH_URL}/{IG_USER_ID}/messages",
+            f"{GRAPH_URL}/me/messages",
             params={"access_token": PAGE_ACCESS_TOKEN},
             json=json_payload,
             timeout=8,
@@ -2030,6 +2195,116 @@ def perform_ig_dm_send(user_id, message, tag=None) -> tuple[bool, str]:
             return True, ""
         else:
             return False, result.get("error", {}).get("message", str(result))
+    except Exception as e:
+        return False, str(e)
+
+def perform_ig_buttons_send(recipient_id, text, buttons_list, tag=None) -> tuple[bool, str]:
+    """Send a message containing multiple buttons (web_url button template or quick replies)."""
+    if not daily_cap_ok():
+        return False, "Daily DM cap reached"
+    
+    if not buttons_list:
+        return perform_ig_dm_send(recipient_id, text, tag=tag)
+        
+    has_url = any(btn.get("url") for btn in buttons_list)
+    
+    try:
+        if has_url:
+            meta_buttons = []
+            for btn in buttons_list[:3]:
+                url = btn.get("url") or "https://google.com"
+                title = btn.get("title") or "Open Link"
+                meta_buttons.append({
+                    "type": "web_url",
+                    "url": url,
+                    "title": title[:20]
+                })
+            json_payload = {
+                "recipient": {"id": recipient_id},
+                "message": {
+                    "attachment": {
+                        "type": "template",
+                        "payload": {
+                            "template_type": "button",
+                            "text": text,
+                            "buttons": meta_buttons
+                        }
+                    }
+                }
+            }
+        else:
+            quick_replies = []
+            for idx, btn in enumerate(buttons_list):
+                title = btn.get("title") or f"Button {idx+1}"
+                quick_replies.append({
+                    "content_type": "text",
+                    "title": title[:20],
+                    "payload": f"IGBTN_MULTI_{idx}"
+                })
+            json_payload = {
+                "recipient": {"id": recipient_id},
+                "message": {
+                    "text": text,
+                    "quick_replies": quick_replies
+                }
+            }
+            
+        if tag:
+            json_payload["messaging_type"] = "MESSAGE_TAG"
+            json_payload["tag"] = tag
+            
+        resp = requests.post(
+            f"{GRAPH_URL}/me/messages",
+            params={"access_token": PAGE_ACCESS_TOKEN},
+            json=json_payload,
+            timeout=8,
+        )
+        result = resp.json()
+        if "message_id" in result:
+            bump_ig_stat("dms_sent")
+            bump_daily_dm()
+            return True, ""
+        return False, result.get("error", {}).get("message", str(result))
+    except Exception as e:
+        return False, str(e)
+
+def perform_ig_button_template_send(recipient_id, follow_up_message, link_url, link_button_label, tag=None) -> tuple[bool, str]:
+    """Send a Button Template DM containing a clickable web_url button."""
+    if not daily_cap_ok():
+        return False, "Daily DM cap reached"
+    try:
+        json_payload = {
+            "recipient": {"id": recipient_id},
+            "message": {
+                "attachment": {
+                    "type": "template",
+                    "payload": {
+                        "template_type": "button",
+                        "text": follow_up_message,
+                        "buttons": [{
+                            "type": "web_url",
+                            "url": link_url,
+                            "title": (link_button_label or "Open Link")[:20]
+                        }]
+                    }
+                }
+            }
+        }
+        if tag:
+            json_payload["messaging_type"] = "MESSAGE_TAG"
+            json_payload["tag"] = tag
+        resp = requests.post(
+            f"{GRAPH_URL}/me/messages",
+            params={"access_token": PAGE_ACCESS_TOKEN},
+            json=json_payload,
+            timeout=8,
+        )
+        result = resp.json()
+        if "message_id" in result:
+            bump_ig_stat("dms_sent")
+            bump_daily_dm()
+            return True, ""
+        return False, result.get("error", {}).get("message", str(result))
     except Exception as e:
         return False, str(e)
 
@@ -2076,6 +2351,59 @@ def ig_queue_worker():
             # Process the first task
             msg_task = queue[0]
             recipient_id = msg_task.get("recipient_id")
+            
+            # ── Follow-up Sequence Worker ──
+            if msg_task.get("is_follow_up"):
+                auto_id = msg_task.get("auto_id")
+                step_index = msg_task.get("step_index")
+                auto = get_ig_automation_by_id(auto_id)
+                if auto:
+                    steps = auto.get("follow_up_steps") or []
+                    if step_index < len(steps):
+                        step = steps[step_index]
+                        text = step.get("message") or ""
+                        
+                        task_delay = float(msg_task.get("delay") or 0)
+                        total_delay = random.uniform(1.0, 4.0) + task_delay
+                        print(f"[IG Worker] Waiting {total_delay:.1f}s for follow-up step {step_index}...", flush=True)
+                        time.sleep(total_delay)
+                        
+                        if step.get("link_url"):
+                            success, error_message = perform_ig_button_template_send(
+                                recipient_id, text, step["link_url"], step.get("link_button_label")
+                            )
+                        elif step.get("advance_mode") == "on_tap" and step.get("button_label"):
+                            btn_label = step["button_label"][:20]
+                            btn_payload = f"IGSTEP_{auto_id}_{step_index}"
+                            quick_replies = [{"content_type": "text", "title": btn_label, "payload": btn_payload}]
+                            success, error_message = perform_ig_dm_send_with_buttons(recipient_id, text, quick_replies)
+                        else:
+                            success, error_message = perform_ig_dm_send(recipient_id, text)
+                            
+                        logs.append({
+                            "recipient_id": recipient_id,
+                            "text": text,
+                            "status": "success" if success else f"failed: {error_message}",
+                            "sent_at": time.time(),
+                            "is_automated": True,
+                            "is_private_reply": False
+                        })
+                        save_ig_messages_log(logs)
+                        
+                        if success:
+                            increment_ig_automation_counter_by_id(auto_id, "dms_sent")
+                            next_idx = step_index + 1
+                            if next_idx < len(steps):
+                                next_step = steps[next_idx]
+                                if next_step.get("advance_mode") == "auto":
+                                    queue_ig_follow_up_task(
+                                        recipient_id, auto_id, next_idx, next_step.get("delay_seconds") or 0
+                                    )
+                
+                queue.pop(0)
+                save_ig_messages_queue(queue)
+                continue
+            
             is_private_reply = msg_task.get("is_private_reply", False)
             automation_name = msg_task.get("automation_name", "manual")
             
@@ -2160,6 +2488,8 @@ def ig_queue_worker():
             
             if is_private_reply and comment_id:
                 success, error_message = perform_ig_private_reply_send(comment_id, text)
+            elif msg_task.get("buttons"):
+                success, error_message = perform_ig_buttons_send(recipient_id, text, msg_task["buttons"], tag=tag_to_use)
             elif msg_task.get("quick_replies"):
                 success, error_message = perform_ig_dm_send_with_buttons(recipient_id, text, msg_task["quick_replies"], tag=tag_to_use)
             else:
@@ -2282,6 +2612,7 @@ def run_ig_automations(trigger_type, text, media_id="", comment_id="", user_id="
             continue
 
         print(f"  IG Auto '{auto['name']}' matched ({trigger_type})", flush=True)
+        increment_ig_automation_counter(auto["name"], "total_runs")
 
         # Welcome DM: only fire once per user (first-time detection)
         if trigger_type == "welcome" and user_id:
@@ -2295,8 +2626,29 @@ def run_ig_automations(trigger_type, text, media_id="", comment_id="", user_id="
 
         action = auto.get("action", "both")
 
+        # Handle "Ask for Follow" Gate
+        if auto.get("ask_follow") and auto.get("follow_prompt") and user_id:
+            conv_state = load_ig_conv_state()
+            user_state = conv_state.get(str(user_id))
+            if not user_state or user_state.get("step") != "awaiting_follow":
+                send_ig_dm(user_id, auto["follow_prompt"], automation_name=auto.get("name"), delay=delay)
+                increment_ig_automation_counter(auto["name"], "dms_sent")
+                
+                conv_state[str(user_id)] = {
+                    "step": "awaiting_follow",
+                    "automation_name": auto.get("name"),
+                    "updatedAt": int(time.time() * 1000)
+                }
+                save_ig_conv_state(conv_state)
+                
+                if action in ("comment", "both") and auto.get("reply") and comment_id:
+                    reply_to_ig_comment(comment_id, personalize_ig_message(auto["reply"], username))
+                    increment_ig_automation_counter(auto["name"], "replies_sent")
+                return True
+
         if action in ("comment", "both") and auto.get("reply") and comment_id:
             reply_to_ig_comment(comment_id, personalize_ig_message(auto["reply"], username))
+            increment_ig_automation_counter(auto["name"], "replies_sent")
 
         if action == "flow" and auto.get("link_url") and user_id:
             start_ig_flow(user_id, auto["link_url"], username)
@@ -2304,6 +2656,8 @@ def run_ig_automations(trigger_type, text, media_id="", comment_id="", user_id="
 
         if action in ("dm", "both") and auto.get("dm_message"):
             dm_body = build_ig_dm_body(auto, username)
+            steps = auto.get("follow_up_steps") or []
+            has_tap_step_0 = len(steps) > 0 and steps[0].get("advance_mode") == "on_tap" and steps[0].get("button_label")
             
             if auto.get("email_capture") and auto.get("email_prompt") and user_id:
                 if comment_id:
@@ -2311,6 +2665,8 @@ def run_ig_automations(trigger_type, text, media_id="", comment_id="", user_id="
                 else:
                     send_ig_dm(user_id, dm_body, automation_name=auto.get("name"), delay=delay)
                 send_ig_dm(user_id, auto["email_prompt"], automation_name=auto.get("name"), delay=delay + 1)
+                increment_ig_automation_counter_by_id(auto.get("id"), "dms_sent")
+                increment_ig_automation_counter_by_id(auto.get("id"), "dms_sent")
                 
                 conv_state = load_ig_conv_state()
                 conv_state[str(user_id)] = {
@@ -2320,28 +2676,63 @@ def run_ig_automations(trigger_type, text, media_id="", comment_id="", user_id="
                 }
                 save_ig_conv_state(conv_state)
                 
-            elif auto.get("follow_up_message") and user_id:
-                if comment_id:
-                    send_ig_private_reply(comment_id, dm_body, recipient_id=user_id, automation_name=auto.get("name"), delay=delay)
+            elif (auto.get("button_enabled") and (auto.get("buttons") or auto.get("button_label"))) or has_tap_step_0:
+                if auto.get("buttons"):
+                    queue_ig_message(
+                        recipient_id=user_id,
+                        text=dm_body,
+                        comment_id=None,
+                        is_private_reply=False,
+                        automation_name=auto.get("name"),
+                        delay=delay,
+                        buttons=auto.get("buttons")
+                    )
                 else:
-                    send_ig_dm(user_id, dm_body, automation_name=auto.get("name"), delay=delay)
+                    if has_tap_step_0:
+                        btn_label = steps[0]["button_label"][:20]
+                        btn_payload = f"IGSTEP_{auto['id']}_0"
+                    else:
+                        btn_label = auto["button_label"][:20]
+                        btn_payload = f"IGBTN_{auto['name']}"
+                        
+                    quick_replies = [{"content_type": "text", "title": btn_label, "payload": btn_payload}]
+                    queue_ig_message(
+                        recipient_id=user_id,
+                        text=dm_body,
+                        comment_id=None,
+                        is_private_reply=False,
+                        automation_name=auto.get("name"),
+                        delay=delay,
+                        quick_replies=quick_replies
+                    )
+                increment_ig_automation_counter_by_id(auto.get("id"), "dms_sent")
+                print(f"  [QuickReply DM] Queued initial DM to {user_id} with button payload={btn_payload}", flush=True)
                 
-                # Sequence drip campaign delay
-                f_delay = int(auto.get("follow_up_delay_seconds") or 3600)
-                send_ig_dm(user_id, auto["follow_up_message"], automation_name=auto.get("name"), delay=delay + f_delay)
-                
-                conv_state = load_ig_conv_state()
-                conv_state[str(user_id)] = {
-                    "step": "awaiting_followup",
-                    "automation_name": auto.get("name"),
-                    "updatedAt": int(time.time() * 1000)
-                }
-                save_ig_conv_state(conv_state)
             else:
+                # Normal initial DM
                 if comment_id:
                     send_ig_private_reply(comment_id, dm_body, recipient_id=user_id, automation_name=auto.get("name"), delay=delay)
                 elif user_id:
                     send_ig_dm(user_id, dm_body, automation_name=auto.get("name"), delay=delay)
+                increment_ig_automation_counter_by_id(auto.get("id"), "dms_sent")
+                
+                # Check for follow-up sequence vs legacy single follow-up
+                if len(steps) > 0:
+                    if steps[0].get("advance_mode") == "auto":
+                        queue_ig_follow_up_task(user_id, auto["id"], 0, steps[0].get("delay_seconds") or 0)
+                elif auto.get("follow_up_message") and user_id:
+                    f_delay = int(auto.get("follow_up_delay_seconds") or 3600)
+                    send_ig_dm(user_id, auto["follow_up_message"], automation_name=auto.get("name"), delay=delay + f_delay)
+                    increment_ig_automation_counter_by_id(auto.get("id"), "dms_sent")
+                    
+                    conv_state = load_ig_conv_state()
+                    conv_state[str(user_id)] = {
+                        "step": "awaiting_followup",
+                        "automation_name": auto.get("name"),
+                        "updatedAt": int(time.time() * 1000)
+                    }
+                    save_ig_conv_state(conv_state)
+
 
         return True
     return False
@@ -2477,6 +2868,67 @@ def handle_ig_messaging(event):
             send_ig_flow_step(sender_id, flow_key, next_step)
             return
 
+    # ── Single-button DM handler ──
+    if postback_payload.startswith("IGBTN_"):
+        auto_name = postback_payload[len("IGBTN_"):]
+        auto = next((a for a in load_ig_automations() if a.get("name") == auto_name), None)
+        if auto and auto.get("button_follow_up_message") and auto.get("link_url"):
+            label = (auto.get("link_button_label") or "Open Link")[:20]
+            success, err = perform_ig_button_template_send(
+                sender_id, auto["button_follow_up_message"], auto["link_url"], label
+            )
+            if success:
+                increment_ig_automation_counter_by_id(auto.get("id"), "dms_sent")
+                print(f"[Button DM] Sent follow-up to {sender_id}", flush=True)
+            else:
+                print(f"[Button DM] Failed: {err}", flush=True)
+        return
+
+    # ── Multi-step Follow-up Sequence Tap Handler ──
+    if postback_payload.startswith("IGSTEP_"):
+        try:
+            parts = postback_payload.split("_")
+            auto_id = int(parts[1])
+            step_index = int(parts[2])
+            
+            # Tapping the button on step_index advances to step_index + 1
+            next_idx = step_index + 1
+            auto = get_ig_automation_by_id(auto_id)
+            if auto:
+                steps = auto.get("follow_up_steps") or []
+                if next_idx < len(steps):
+                    next_step = steps[next_idx]
+                    text = next_step.get("message") or ""
+                    
+                    # Choose rendering format based on link presence
+                    if next_step.get("link_url"):
+                        success, err = perform_ig_button_template_send(
+                            sender_id, text, next_step["link_url"], next_step.get("link_button_label")
+                        )
+                    elif next_step.get("advance_mode") == "on_tap" and next_step.get("button_label"):
+                        btn_label = next_step["button_label"][:20]
+                        btn_payload = f"IGSTEP_{auto_id}_{next_idx}"
+                        quick_replies = [{"content_type": "text", "title": btn_label, "payload": btn_payload}]
+                        success, err = perform_ig_dm_send_with_buttons(sender_id, text, quick_replies)
+                    else:
+                        success, err = perform_ig_dm_send(sender_id, text)
+                        
+                    if success:
+                        increment_ig_automation_counter_by_id(auto_id, "dms_sent")
+                        print(f"[IGSTEP] Sent step {next_idx} to {sender_id}", flush=True)
+                        
+                        # If the subsequent step is timer-based ("auto"), schedule it
+                        after_next_idx = next_idx + 1
+                        if after_next_idx < len(steps):
+                            after_next_step = steps[after_next_idx]
+                            if after_next_step.get("advance_mode") == "auto":
+                                queue_ig_follow_up_task(
+                                    sender_id, auto_id, after_next_idx, after_next_step.get("delay_seconds") or 0
+                                )
+        except Exception as e:
+            print(f"[IGSTEP Error] Failed to process tap: {e}", flush=True)
+        return
+
     # Identify story mention
     is_story_mention = False
     attachments = message.get("attachments", []) or []
@@ -2520,6 +2972,27 @@ def handle_ig_messaging(event):
                 auto_name = user_state.get("automation_name")
                 auto = next((a for a in load_ig_automations() if a.get("name") == auto_name), None)
                 
+                if step == "awaiting_follow" and auto:
+                    increment_ig_automation_counter(auto_name, "follow_gate_conversions")
+                    dm_body = build_ig_dm_body(auto, "")
+                    if auto.get("email_capture") and auto.get("email_prompt"):
+                        send_ig_dm(sender_id, dm_body, automation_name=auto_name)
+                        send_ig_dm(sender_id, auto["email_prompt"], automation_name=auto_name, delay=1)
+                        increment_ig_automation_counter(auto_name, "dms_sent")
+                        increment_ig_automation_counter(auto_name, "dms_sent")
+                        
+                        conv_state[str(sender_id)] = {
+                            "step": "awaiting_email",
+                            "automation_name": auto_name,
+                            "updatedAt": int(time.time() * 1000)
+                        }
+                    else:
+                        send_ig_dm(sender_id, dm_body, automation_name=auto_name)
+                        increment_ig_automation_counter(auto_name, "dms_sent")
+                        del conv_state[str(sender_id)]
+                    save_ig_conv_state(conv_state)
+                    return
+
                 if step == "awaiting_email" and auto:
                     if is_valid_email(text):
                         email = text.strip()
@@ -3179,120 +3652,149 @@ INSTAGRAM_HTML = """
 <head>
   <title>Instagram AutoDM — AutoReply</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(135deg,#fdf2f8 0%,#faf5ff 50%,#f0f2f5 100%);color:#1c1e21;min-height:100vh}
-    header{background:#fff;border-bottom:1px solid #e4e6eb;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
-    .logo{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:700;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    body{font-family:'Outfit',-apple-system,BlinkMacSystemFont,sans-serif;background:linear-gradient(135deg,#fdf2f8 0%,#faf5ff 50%,#f0f2f5 100%);color:#1f2937;min-height:100vh}
+    header{background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+    .logo{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:800;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
     .container{max-width:960px;margin:28px auto;padding:0 16px}
-    .hero{background:linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045);border-radius:16px;padding:24px 28px;color:#fff;margin-bottom:20px}
-    .hero h1{font-size:22px;font-weight:700;margin-bottom:6px}
-    .hero p{font-size:14px;opacity:.92;line-height:1.5}
+    .hero{background:linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045);border-radius:18px;padding:26px 30px;color:#fff;margin-bottom:24px;box-shadow:0 10px 25px -5px rgba(253,29,29,0.15)}
+    .hero h1{font-size:24px;font-weight:800;margin-bottom:6px;letter-spacing:-0.5px}
+    .hero p{font-size:14px;opacity:.92;line-height:1.6}
     .feature-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
     .chip{background:rgba(255,255,255,.2);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600}
-    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
     @media(max-width:700px){.stats{grid-template-columns:repeat(2,1fr)}}
-    .stat-box{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);text-align:center}
-    .stat-num{font-size:24px;font-weight:700;background:linear-gradient(45deg,#833ab4,#fd1d1d);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-    .stat-label{font-size:11px;color:#65676b;margin-top:4px}
-    .card{background:#fff;border-radius:14px;padding:22px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.08)}
-    .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px}
-    .card-header h2{font-size:16px;font-weight:600}
-    .auto-item{border:1px solid #fce7f3;border-radius:12px;padding:16px;margin-bottom:12px;display:flex;align-items:center;gap:14px}
-    .auto-thumb{width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0}
-    .auto-thumb-ph{width:52px;height:52px;border-radius:8px;background:linear-gradient(135deg,#fdf2f8,#fae8ff);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+    .stat-box{background:#fff;border-radius:14px;padding:18px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05),0 2px 4px -1px rgba(0,0,0,0.03);text-align:center}
+    .stat-num{font-size:26px;font-weight:800;background:linear-gradient(45deg,#833ab4,#fd1d1d);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .stat-label{font-size:12px;color:#6b7280;margin-top:4px;font-weight:500}
+    .card{background:#fff;border-radius:18px;padding:24px;margin-bottom:24px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05),0 2px 4px -1px rgba(0,0,0,0.03)}
+    .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px}
+    .card-header h2{font-size:18px;font-weight:700;letter-spacing:-0.3px}
+    .auto-item{border:1px solid #f3f4f6;border-radius:16px;padding:18px;margin-bottom:14px;display:flex;align-items:center;gap:16px;transition:all 0.2s}
+    .auto-item:hover{border-color:#fbcfe8;box-shadow:0 4px 12px rgba(0,0,0,0.02)}
+    .auto-thumb{width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0;border:1px solid #f3f4f6}
+    .auto-thumb-ph{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#fdf2f8,#fae8ff);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
     .auto-info{flex:1;min-width:0}
-    .auto-name{font-weight:600;font-size:14px}
-    .auto-meta{font-size:12px;color:#65676b;margin-top:4px;display:flex;flex-wrap:wrap;gap:6px}
+    .auto-name{font-weight:700;font-size:15px;color:#111827}
+    .auto-meta{font-size:12px;color:#6b7280;margin-top:5px;display:flex;flex-wrap:wrap;gap:6px}
+    .auto-metrics{display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;padding-top:8px;border-top:1px solid #f3f4f6}
+    .metric-pill{font-size:11px;font-weight:600;color:#4b5563;display:inline-flex;align-items:center;gap:4px}
+    .metric-pill strong{color:#db2777}
     .auto-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
-    .pill{display:inline-flex;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600}
+    .pill{display:inline-flex;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
     .pill-pink{background:#fdf2f8;color:#db2777}
     .pill-purple{background:#f3e8ff;color:#7c3aed}
     .pill-green{background:#f0fdf4;color:#16a34a}
     .pill-orange{background:#fff7ed;color:#ea580c}
     .pill-blue{background:#e7f3ff;color:#1877f2}
-    .empty-state{text-align:center;padding:40px 20px;color:#65676b}
-    .btn{padding:7px 14px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
-    .btn-primary{background:linear-gradient(45deg,#833ab4,#fd1d1d);color:#fff;padding:9px 18px;font-size:14px}
-    .btn-danger{background:#ff4d4f;color:#fff}
+    .empty-state{text-align:center;padding:50px 20px;color:#6b7280}
+    .btn{padding:8px 16px;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:all 0.2s}
+    .btn-primary{background:linear-gradient(45deg,#833ab4,#fd1d1d);color:#fff;box-shadow:0 4px 10px rgba(253,29,29,0.15)}
+    .btn-primary:hover{opacity:.95;transform:translateY(-1px)}
+    .btn-danger{background:#fee2e2;color:#ef4444}
+    .btn-danger:hover{background:#fecaca}
     .btn-edit{background:#fdf2f8;color:#db2777}
-    .toggle{position:relative;display:inline-block;width:40px;height:22px}
+    .btn-edit:hover{background:#fce7f3}
+    .toggle{position:relative;display:inline-block;width:42px;height:24px}
     .toggle input{opacity:0;width:0;height:0}
-    .slider{position:absolute;cursor:pointer;inset:0;background:#ccd0d5;border-radius:22px;transition:.3s}
-    .slider:before{position:absolute;content:"";height:16px;width:16px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s}
+    .slider{position:absolute;cursor:pointer;inset:0;background:#e5e7eb;border-radius:24px;transition:.3s}
+    .slider:before{position:absolute;content:"";height:18px;width:18px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s;box-shadow:0 1px 3px rgba(0,0,0,0.15)}
     input:checked+.slider{background:linear-gradient(45deg,#833ab4,#fd1d1d)}
     input:checked+.slider:before{transform:translateX(18px)}
-    .platform-tabs{display:flex;gap:4px;background:#f0f2f5;border-radius:10px;padding:4px}
-    .platform-tab{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;color:#65676b;text-decoration:none}
-    .platform-tab.active{background:#fff;color:#db2777;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-    .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;align-items:center;justify-content:center}
+    .overlay{display:none;position:fixed;inset:0;background:rgba(17,24,39,0.5);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
     .overlay.open{display:flex}
-    .modal{background:#fff;border-radius:18px;width:94%;max-width:560px;max-height:92vh;overflow-y:auto}
-    .modal-header{padding:20px 20px 0;display:flex;justify-content:space-between;align-items:center}
-    .modal-header h3{font-size:18px;font-weight:700}
-    .modal-close{background:none;border:none;font-size:24px;cursor:pointer;color:#65676b}
-    .modal-body{padding:20px}
+    .modal{background:#fff;border-radius:20px;width:94%;max-width:680px;max-height:92vh;overflow-y:auto;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);display:flex;flex-direction:column}
+    .modal-header{padding:22px 24px 10px;display:flex;justify-content:space-between;align-items:center}
+    .modal-header h3{font-size:19px;font-weight:800;letter-spacing:-0.3px}
+    .modal-close{background:none;border:none;font-size:26px;cursor:pointer;color:#9ca3af}
+    .modal-body{padding:20px 24px;flex:1}
     .step{display:none}.step.active{display:block}
-    .step-title{font-size:15px;font-weight:600;margin-bottom:5px}
-    .step-sub{font-size:13px;color:#65676b;margin-bottom:16px}
-    .step-dots{display:flex;justify-content:center;gap:8px;margin-bottom:20px}
-    .step-dot{width:8px;height:8px;border-radius:50%;background:#e4e6eb;transition:.2s}
+    .step-title{font-size:16px;font-weight:700;margin-bottom:6px;color:#111827}
+    .step-sub{font-size:13px;color:#6b7280;margin-bottom:18px;line-height:1.5}
+    .step-dots{display:flex;justify-content:center;gap:8px;margin-bottom:22px}
+    .step-dot{width:8px;height:8px;border-radius:50%;background:#e5e7eb;transition:.2s}
     .step-dot.active{background:linear-gradient(45deg,#833ab4,#fd1d1d);width:24px;border-radius:4px}
+    
+    .picker-grid{display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:10px}
+    .picker-card{border:2px solid #e5e7eb;border-radius:14px;padding:16px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:14px}
+    .picker-card:hover,.picker-card.selected{border-color:#db2777;background:#fdf2f8}
+    .picker-card-icon{font-size:28px}
+    .picker-card-info{flex:1}
+    .picker-card-title{font-size:14px;font-weight:700;color:#111827}
+    .picker-card-desc{font-size:12px;color:#6b7280;margin-top:2px}
+    
     .option-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .option-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-    @media(max-width:500px){.option-grid-3{grid-template-columns:1fr 1fr}}
-    .option-card{border:2px solid #e4e6eb;border-radius:12px;padding:14px 10px;text-align:center;cursor:pointer;transition:.2s}
+    .option-card{border:2px solid #e5e7eb;border-radius:14px;padding:18px 10px;text-align:center;cursor:pointer;transition:all 0.2s}
     .option-card:hover,.option-card.selected{border-color:#db2777;background:#fdf2f8}
-    .oc-icon{font-size:24px;margin-bottom:4px}
-    .oc-label{font-size:12px;font-weight:600}
-    .oc-desc{font-size:10px;color:#65676b;margin-top:2px}
-    .posts-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-height:260px;overflow-y:auto;margin-bottom:10px}
-    .post-card{border:2px solid #e4e6eb;border-radius:10px;overflow:hidden;cursor:pointer;position:relative}
-    .post-card.selected{border-color:#db2777}
+    .oc-icon{font-size:26px;margin-bottom:6px}
+    .oc-label{font-size:13px;font-weight:700}
+    
+    .posts-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-height:280px;overflow-y:auto;margin-bottom:10px;padding:2px}
+    .post-card{border:2px solid #e5e7eb;border-radius:12px;overflow:hidden;cursor:pointer;position:relative;transition:all 0.2s}
+    .post-card.selected{border-color:#db2777;transform:scale(0.98)}
     .post-card img,.post-thumb-ph{width:100%;aspect-ratio:1;object-fit:cover;display:block}
-    .post-thumb-ph{background:#fdf2f8;display:flex;align-items:center;justify-content:center;font-size:22px}
-    .post-caption{font-size:10px;padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#65676b}
-    .post-check{position:absolute;top:5px;left:5px;background:#db2777;color:#fff;border-radius:50%;width:18px;height:18px;display:none;align-items:center;justify-content:center;font-size:10px}
+    .post-thumb-ph{background:#fdf2f8;display:flex;align-items:center;justify-content:center;font-size:24px}
+    .post-caption{font-size:11px;padding:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#6b7280;background:#fafafa}
+    .post-check{position:absolute;top:6px;left:6px;background:#db2777;color:#fff;border-radius:50%;width:20px;height:20px;display:none;align-items:center;justify-content:center;font-size:11px;font-weight:bold}
     .post-card.selected .post-check{display:flex}
-    .input-group{margin-bottom:14px}
-    .input-group label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
-    .input-group input,.input-group textarea{width:100%;padding:10px 12px;border:1px solid #ccd0d5;border-radius:8px;font-size:14px;font-family:inherit;resize:none}
+    
+    .input-group{margin-bottom:16px}
+    .input-group label{display:block;font-size:13px;font-weight:700;margin-bottom:6px;color:#374151}
+    .input-group input,.input-group textarea{width:100%;padding:11px 14px;border:1px solid #d1d5db;border-radius:10px;font-size:14px;font-family:inherit;resize:none;transition:border-color 0.2s}
     .input-group input:focus,.input-group textarea:focus{border-color:#db2777;outline:none}
-    .check-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;padding:12px;background:#fafafa;border-radius:10px}
-    .check-row input{margin-top:3px}
-    .check-row label{font-size:13px;font-weight:500;cursor:pointer}
-    .check-row small{display:block;color:#65676b;font-size:11px;margin-top:2px}
+    
+    .check-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:14px;padding:14px;background:#f9fafb;border-radius:12px;border:1px solid #f3f4f6}
+    .check-row input{margin-top:4px}
+    .check-row label{font-size:13px;font-weight:600;cursor:pointer;color:#374151}
+    .check-row small{display:block;color:#6b7280;font-size:11px;margin-top:2px;font-weight:normal}
+    
     .kw-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-    .kw-tag{background:#fdf2f8;color:#db2777;border-radius:20px;padding:4px 10px;font-size:12px;display:flex;gap:5px;align-items:center}
-    .kw-tag button{background:none;border:none;cursor:pointer;color:#db2777}
-    .modal-footer{padding:0 20px 20px;display:flex;justify-content:space-between}
-    .btn-outline{background:#f0f2f5;border:none;border-radius:8px;padding:9px 18px;font-weight:600;cursor:pointer}
-    .notice{background:#fdf2f8;border:1px solid #fbcfe8;border-radius:8px;padding:10px 14px;font-size:12px;color:#9d174d;margin-bottom:14px;line-height:1.5}
+    .kw-tag{background:#fdf2f8;color:#db2777;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;display:flex;gap:6px;align-items:center}
+    .kw-tag button{background:none;border:none;cursor:pointer;color:#db2777;font-size:14px}
+    
+    .preview-split{display:grid;grid-template-columns:1.2fr 1fr;gap:20px}
+    @media(max-width:640px){.preview-split{grid-template-columns:1fr}}
+    
+    .preview-phone{background:#fff;border:10px solid #111827;border-radius:36px;width:240px;height:420px;margin:0 auto;box-shadow:0 10px 25px rgba(0,0,0,0.1);display:flex;flex-direction:column;overflow:hidden}
+    .phone-header{background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:10px 14px;display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700}
+    .phone-avatar{width:20px;height:20px;border-radius:50%;background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366)}
+    .phone-body{flex:1;background:#fff;padding:12px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;font-size:11px}
+    .msg-bubble{max-width:85%;padding:8px 12px;border-radius:16px;line-height:1.4;word-wrap:break-word}
+    .msg-incoming{align-self:flex-start;background:#f3f4f6;color:#111827}
+    .msg-outgoing{align-self:flex-end;background:linear-gradient(135deg,#833ab4,#fd1d1d);color:#fff}
+    .phone-btn{margin-top:6px;background:#fff;color:#0095f6;border:1px solid #dbdbdb;padding:6px;border-radius:8px;text-align:center;font-size:10px;font-weight:700;cursor:pointer}
+    .preview-comment-block{background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:12px;font-size:12px;margin-bottom:12px}
+    
+    .modal-footer{padding:16px 24px 22px;display:flex;justify-content:space-between;border-top:1px solid #f3f4f6}
+    .btn-outline{background:#f3f4f6;border:none;border-radius:10px;padding:9px 18px;font-weight:600;cursor:pointer;font-family:inherit}
+    .notice{background:#fdf2f8;border:1px solid #fbcfe8;border-radius:10px;padding:12px 14px;font-size:12px;color:#9d174d;margin-bottom:16px;line-height:1.6}
     table{width:100%;border-collapse:collapse}
-    th{text-align:left;font-size:12px;color:#65676b;padding:8px;border-bottom:1px solid #e4e6eb}
-    td{padding:10px;font-size:13px;border-bottom:1px solid #f0f2f5}
-    .tag{background:#fdf2f8;color:#db2777;border-radius:6px;padding:2px 7px;font-size:11px;font-family:monospace}
-    .section-label{font-size:11px;font-weight:700;color:#65676b;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 10px}
+    th{text-align:left;font-size:12px;color:#6b7280;padding:10px;border-bottom:1px solid #e5e7eb;font-weight:600}
+    td{padding:12px 10px;font-size:13px;border-bottom:1px solid #f3f4f6}
+    .tag{background:#fdf2f8;color:#db2777;border-radius:6px;padding:3px 8px;font-size:11px;font-family:monospace;font-weight:600}
+    .section-label{font-size:11px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;margin:18px 0 8px}
   </style>
 </head>
 <body>
 <header>
   <div class="logo">📷 Instagram AutoDM</div>
   <div style="display:flex;align-items:center;gap:16px">
-    <!-- Removed platform tabs since Instagram is handled by SuperProfile -->
     <button class="btn btn-primary" onclick="openModal()">+ Create Automation</button>
   </div>
 </header>
 
 <div class="container">
   <div class="hero">
-    <h1>Instagram Automation</h1>
-    <p>AutoDM, comment replies, story & live automation — inspired by SuperProfile.bio. Uses your Meta Graph API token from .env.</p>
+    <h1>Instagram AutoDM Automation</h1>
+    <p>SuperProfile-grade instagram interactions. Choose comments, stories, live streams, inbound keywords, or tag mentions to trigger customized DM responses.</p>
     <div class="feature-chips">
-      <span class="chip">AutoDM</span><span class="chip">Comment Reply</span><span class="chip">Keyword Triggers</span>
-      <span class="chip">Story Replies</span><span class="chip">Live Comments</span><span class="chip">DM Keywords</span>
-      <span class="chip">@Mention</span><span class="chip">Link in DM</span><span class="chip">Email Capture</span>
-      <span class="chip">Welcome DM</span><span class="chip">Daily Cap</span><span class="chip">Send Delay</span>
+      <span class="chip">Comment → DM</span><span class="chip">Story Reply → DM</span><span class="chip">Live Comment → DM</span>
+      <span class="chip">DM Keyword → Reply</span><span class="chip">Mention → DM</span><span class="chip">Follow Gate</span>
+      <span class="chip">Email Capture</span><span class="chip">Link Button</span><span class="chip">Human Delay</span>
     </div>
   </div>
 
@@ -3308,8 +3810,8 @@ INSTAGRAM_HTML = """
 
   <div class="card">
     <div class="card-header">
-      <h2>Instagram Automations</h2>
-      <button class="btn" onclick="resetStats()" style="background:#f0f2f5;color:#65676b;font-size:12px;padding:6px 12px">🔄 Reset Stats</button>
+      <h2>Automations Center</h2>
+      <button class="btn" onclick="resetStats()" style="background:#f3f4f6;color:#4b5563;font-size:12px;padding:6px 12px">🔄 Reset Stats</button>
     </div>
     {% for auto in automations %}
     <div class="auto-item">
@@ -3325,13 +3827,24 @@ INSTAGRAM_HTML = """
           {% elif tt == 'dm' %}<span class="pill pill-blue">✉️ DM Keyword</span>
           {% elif tt == 'mention' %}<span class="pill pill-orange">📣 @Mention</span>
           {% else %}<span class="pill pill-green">👋 Welcome DM</span>{% endif %}
+          
           {% if auto.get('scope')=='all' %}<span class="pill pill-pink">All media</span>
           {% else %}<span class="pill pill-pink">{{ auto.get('post_ids',[])|length }} post(s)</span>{% endif %}
+          
           {% if auto.get('keyword_type')=='any' %}<span class="pill pill-green">Any text</span>
           {% else %}<span class="pill pill-green">🔑 {{ auto.get('keywords',[])|join(', ') }}</span>{% endif %}
+          
           {% if auto.get('ask_follow') %}<span class="pill pill-orange">Follow gate</span>{% endif %}
           {% if auto.get('email_capture') %}<span class="pill pill-blue">Email capture</span>{% endif %}
           {% if auto.get('link_url') %}<span class="pill pill-purple">Link</span>{% endif %}
+        </div>
+        <div class="auto-metrics">
+          <span class="metric-pill">Runs: <strong>{{ auto.get('total_runs', 0) }}</strong></span>
+          <span class="metric-pill">DMs Sent: <strong>{{ auto.get('dms_sent', 0) }}</strong></span>
+          <span class="metric-pill">Replies: <strong>{{ auto.get('replies_sent', 0) }}</strong></span>
+          {% if auto.get('ask_follow') %}
+          <span class="metric-pill">Conversions: <strong>{{ auto.get('follow_gate_conversions', 0) }}</strong></span>
+          {% endif %}
         </div>
       </div>
       <div class="auto-actions">
@@ -3342,22 +3855,22 @@ INSTAGRAM_HTML = """
       </div>
     </div>
     {% else %}
-    <div class="empty-state"><div style="font-size:40px;margin-bottom:10px">📷</div><p>No Instagram automations yet.<br>Create your first AutoDM rule.</p></div>
+    <div class="empty-state"><div style="font-size:40px;margin-bottom:10px">📷</div><p>No Instagram automations configured yet.<br>Create a SuperProfile AutoDM rule.</p></div>
     {% endfor %}
   </div>
 
   <div class="card">
     <div class="card-header"><h2>Global DM Keywords</h2></div>
-    <div class="notice">Fallback replies when no automation matches an incoming DM keyword.</div>
+    <div class="notice">Fallback replies when no custom automation rule matches an incoming DM keyword.</div>
     <table><thead><tr><th>Keyword</th><th>Reply</th><th></th></tr></thead>
     <tbody>{% for kw, reply in keywords.items() %}
       <tr><td><span class="tag">{{ kw }}</span></td><td>{{ reply }}</td>
       <td><button class="btn btn-danger" onclick="deleteKeyword('{{ kw }}')">Delete</button></td></tr>
-    {% else %}<tr><td colspan="3" style="text-align:center;color:#65676b;padding:20px">No keywords</td></tr>{% endfor %}
+    {% else %}<tr><td colspan="3" style="text-align:center;color:#6b7280;padding:20px">No keywords</td></tr>{% endfor %}
     </tbody></table>
     <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
-      <input type="text" id="g-kw" placeholder="Keyword" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid #ccd0d5;border-radius:8px">
-      <input type="text" id="g-reply" placeholder="Auto-reply message" style="flex:2;min-width:160px;padding:9px 12px;border:1px solid #ccd0d5;border-radius:8px">
+      <input type="text" id="g-kw" placeholder="Keyword" style="flex:1;min-width:120px;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px">
+      <input type="text" id="g-reply" placeholder="Auto-reply message" style="flex:2;min-width:160px;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px">
       <button class="btn btn-primary" onclick="addGlobalKeyword()">+ Add</button>
     </div>
   </div>
@@ -3365,102 +3878,167 @@ INSTAGRAM_HTML = """
   <div class="card">
     <div class="card-header"><h2>⚙️ Settings</h2></div>
     <div style="max-width:420px">
-      <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px">Daily DM Cap</label>
-      <p style="font-size:12px;color:#65676b;margin-bottom:10px">Max DMs to send per day (auto-resets at midnight). Prevents Instagram spam flags.<br>Remaining today: <strong id="cap-remaining">loading...</strong></p>
+      <label style="font-size:13px;font-weight:700;display:block;margin-bottom:4px">Daily DM Cap</label>
+      <p style="font-size:12px;color:#6b7280;margin-bottom:10px">Max DMs to send per day (auto-resets at midnight). Prevents spam flags.<br>Remaining today: <strong id="cap-remaining">loading...</strong></p>
       <div style="display:flex;gap:10px">
-        <input type="number" id="daily-cap-input" min="1" max="1000" value="200" style="flex:1;padding:9px 12px;border:1px solid #ccd0d5;border-radius:8px;font-size:14px;outline:none">
+        <input type="number" id="daily-cap-input" min="1" max="1000" value="200" style="flex:1;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;outline:none">
         <button class="btn btn-primary" onclick="saveDailyCap()">Save</button>
       </div>
     </div>
   </div>
-
 </div>
-
 
 <div class="overlay" id="modal-overlay">
   <div class="modal">
     <div class="modal-header"><h3 id="modal-title">Create Instagram Automation</h3><button class="modal-close" onclick="closeModal()">×</button></div>
     <div class="modal-body">
-      <div class="step-dots"><div class="step-dot active" id="dot-1"></div><div class="step-dot" id="dot-2"></div><div class="step-dot" id="dot-3"></div><div class="step-dot" id="dot-4"></div><div class="step-dot" id="dot-5"></div><div class="step-dot" id="dot-6"></div></div>
+      <div class="step-dots">
+        <div class="step-dot active" id="dot-1"></div>
+        <div class="step-dot" id="dot-2"></div>
+        <div class="step-dot" id="dot-3"></div>
+        <div class="step-dot" id="dot-4"></div>
+      </div>
 
       <div class="step active" id="step-1">
         <div class="step-title">What should trigger this?</div>
-        <div class="step-sub">Choose the Instagram interaction type (SuperProfile-style triggers).</div>
-        <div class="option-grid-3">
-          <div class="option-card" id="trigger-comment" onclick="selectTrigger('comment')"><div class="oc-icon">💬</div><div class="oc-label">Post/Reel Comment</div><div class="oc-desc">AutoDM on comments</div></div>
-          <div class="option-card" id="trigger-story" onclick="selectTrigger('story')"><div class="oc-icon">📖</div><div class="oc-label">Story Reply</div><div class="oc-desc">When someone replies to story</div></div>
-          <div class="option-card" id="trigger-live" onclick="selectTrigger('live')"><div class="oc-icon">🔴</div><div class="oc-label">Live Comment</div><div class="oc-desc">During live streams</div></div>
-          <div class="option-card" id="trigger-dm" onclick="selectTrigger('dm')"><div class="oc-icon">✉️</div><div class="oc-label">DM Keyword</div><div class="oc-desc">Incoming DM trigger</div></div>
-          <div class="option-card" id="trigger-welcome" onclick="selectTrigger('welcome')"><div class="oc-icon">👋</div><div class="oc-label">Welcome DM</div><div class="oc-desc">First-time conversation only</div></div>
-          <div class="option-card" id="trigger-mention" onclick="selectTrigger('mention')"><div class="oc-icon">📣</div><div class="oc-label">@Mention</div><div class="oc-desc">Tagged in post/story</div></div>
+        <div class="step-sub">Select the interaction trigger for this automation rule.</div>
+        <div class="picker-grid">
+          <div class="picker-card" id="trigger-comment" onclick="selectTrigger('comment')"><div class="picker-card-icon">💬</div><div class="picker-card-info"><div class="picker-card-title">Post/Reel Comment</div><div class="picker-card-desc">AutoDM people commenting on reels or posts</div></div></div>
+          <div class="picker-card" id="trigger-story" onclick="selectTrigger('story')"><div class="picker-card-icon">📖</div><div class="picker-card-info"><div class="picker-card-title">Story Reply</div><div class="picker-card-desc">Auto-reply when someone responds to your stories</div></div></div>
+          <div class="picker-card" id="trigger-live" onclick="selectTrigger('live')"><div class="picker-card-icon">🔴</div><div class="picker-card-info"><div class="picker-card-title">Live Comment</div><div class="picker-card-desc">AutoDM triggers from comments during active Live videos</div></div></div>
+          <div class="picker-card" id="trigger-dm" onclick="selectTrigger('dm')"><div class="picker-card-icon">✉️</div><div class="picker-card-info"><div class="picker-card-title">Incoming DM</div><div class="picker-card-desc">Trigger replies when users DM you with a keyword</div></div></div>
+          <div class="picker-card" id="trigger-mention" onclick="selectTrigger('mention')"><div class="picker-card-icon">📣</div><div class="picker-card-info"><div class="picker-card-title">Mention</div><div class="picker-card-desc">Trigger replies when people tag you in story/posts</div></div></div>
         </div>
       </div>
 
       <div class="step" id="step-2">
-        <div class="step-title">Which posts/reels?</div>
-        <div class="step-sub" id="scope-sub">Apply to all media or pick specific posts.</div>
-        <div class="option-grid">
-          <div class="option-card" id="scope-all" onclick="selectScope('all')"><div class="oc-icon">📢</div><div class="oc-label">All Posts & Reels</div></div>
-          <div class="option-card" id="scope-specific" onclick="selectScope('specific')"><div class="oc-icon">📌</div><div class="oc-label">Specific Media</div></div>
+        <div class="step-title">Trigger Setup</div>
+        <div class="step-sub">Configure how and when this automation rule triggers.</div>
+        
+        <div class="input-group">
+          <label>Automation Name</label>
+          <input type="text" id="auto-name" placeholder="e.g. Campaign Link AutoDM">
         </div>
-      </div>
-
-      <div class="step" id="step-3">
-        <div class="step-title">Select Instagram Media</div>
-        <div id="posts-grid-modal" class="posts-grid"><div style="text-align:center;padding:20px;color:#65676b">Loading...</div></div>
-        <div id="post-select-count" style="font-size:12px;color:#65676b"></div>
-      </div>
-
-      <div class="step" id="step-4">
-        <div class="step-title">Keyword trigger</div>
-        <div class="step-sub">Reply when comment/DM contains specific words, or any message.</div>
-        <div class="option-grid">
-          <div class="option-card" id="kw-any" onclick="selectKwType('any')"><div class="oc-icon">💬</div><div class="oc-label">Any Message</div></div>
-          <div class="option-card" id="kw-specific" onclick="selectKwType('specific')"><div class="oc-icon">🔑</div><div class="oc-label">Specific Keywords</div></div>
+        
+        <div id="post-select-section" style="display:none">
+          <div class="section-label">Select Media Scope</div>
+          <div class="option-grid" style="margin-bottom:14px">
+            <div class="option-card" id="scope-all" onclick="selectScope('all')"><div class="oc-icon">📢</div><div class="oc-label">All Posts & Reels</div></div>
+            <div class="option-card" id="scope-specific" onclick="selectScope('specific')"><div class="oc-icon">📌</div><div class="oc-label">Specific Media</div></div>
+          </div>
+          
+          <div id="media-grid-container" style="display:none">
+            <div class="section-label">Select Instagram Media</div>
+            <div id="posts-grid-modal" class="posts-grid"><div style="text-align:center;padding:20px;color:#6b7280">Loading...</div></div>
+            <div id="post-select-count" style="font-size:12px;color:#6b7280;font-weight:600;margin-bottom:14px"></div>
+          </div>
         </div>
-        <div id="kw-input-area" style="display:none;margin-top:14px">
-          <div class="input-group"><label>Keywords (e.g. link, price, info)</label>
-            <div style="display:flex;gap:8px"><input type="text" id="kw-input" placeholder="Add keyword" onkeydown="if(event.key==='Enter')addKwTag()"><button class="btn btn-primary" onclick="addKwTag()">Add</button></div>
+
+        <div class="section-label">Trigger Match Condition</div>
+        <div class="option-grid" style="margin-bottom:14px">
+          <div class="option-card" id="kw-any" onclick="selectKwType('any')"><div class="oc-icon">💬</div><div class="oc-label">Respond to All</div></div>
+          <div class="option-card" id="kw-specific" onclick="selectKwType('specific')"><div class="oc-icon">🔑</div><div class="oc-label">Only Specific Keywords</div></div>
+        </div>
+        
+        <div id="kw-input-area" style="display:none">
+          <div class="input-group">
+            <label>Keywords (e.g. link, discount, send)</label>
+            <div style="display:flex;gap:8px">
+              <input type="text" id="kw-input" placeholder="Enter keyword" onkeydown="if(event.key==='Enter')addKwTag()">
+              <button class="btn btn-primary" onclick="addKwTag()">Add</button>
+            </div>
           </div>
           <div class="kw-tags" id="kw-tags"></div>
         </div>
       </div>
 
-      <div class="step" id="step-5">
-        <div class="step-title">Action type</div>
-        <div class="option-grid-3">
-          <div class="option-card" id="action-comment" onclick="selectAction('comment')"><div class="oc-icon">💬</div><div class="oc-label">Comment Only</div></div>
-          <div class="option-card" id="action-dm" onclick="selectAction('dm')"><div class="oc-icon">✉️</div><div class="oc-label">AutoDM Only</div></div>
-          <div class="option-card" id="action-both" onclick="selectAction('both')"><div class="oc-icon">🔔</div><div class="oc-label">Both</div></div>
+      <div class="step" id="step-3">
+        <div class="step-title">Message & Options</div>
+        <div class="step-sub">Draft responses and select gate conversion triggers.</div>
+        
+        <div class="input-group">
+          <label>Initial DM Message</label>
+          <textarea id="auto-dm" rows="3" placeholder="Hi {username}! Here's the link you requested..."></textarea>
         </div>
-      </div>
-
-      <div class="step" id="step-6">
-        <div class="step-title">Messages & advanced options</div>
-        <div class="notice">Instagram allows one private reply per comment within 7 days. Use {username} for personalization.</div>
-        <div class="input-group"><label>Automation Name</label><input type="text" id="auto-name" placeholder="e.g. Reel Link AutoDM"></div>
-
-        <div id="comment-section">
-          <div class="section-label">Public Comment Reply</div>
-          <div class="input-group"><textarea id="auto-reply" rows="2" placeholder="Thanks @{username}! Check your DMs 📩"></textarea></div>
-        </div>
-
-        <div id="dm-section">
-          <div class="section-label">AutoDM Message</div>
-          <div class="input-group"><textarea id="auto-dm" rows="3" placeholder="Hi {username}! Here's the link you asked for..."></textarea></div>
-          <div class="input-group"><label>Link URL (optional)</label><input type="url" id="auto-link" placeholder="https://superprofile.bio/yourlink"></div>
-          <div class="input-group"><label>Follow-up DM (optional)</label><textarea id="auto-followup" rows="2" placeholder="Did you get a chance to check it out?"></textarea></div>
+        
+        <div id="public-reply-section" style="display:none">
           <div class="input-group">
-            <label>Send Delay <span style="color:#65676b;font-weight:400;font-size:11px">(seconds, 0 = instant — humanises the response timing)</span></label>
-            <input type="number" id="auto-delay" min="0" max="30" value="0" style="max-width:110px;padding:9px 12px;border:1px solid #ccd0d5;border-radius:8px;font-size:14px;outline:none">
+            <label>Public Comment Reply Text</label>
+            <textarea id="auto-reply" rows="2" placeholder="Thanks @{username}! Check your DMs 📩"></textarea>
           </div>
         </div>
 
-        <div class="section-label">SuperProfile-style extras</div>
-        <div class="check-row"><input type="checkbox" id="ask-follow"><label for="ask-follow"><strong>Ask for Follow</strong><small>Send a follow prompt before the link/DM content</small></label></div>
-        <div class="input-group" id="follow-prompt-wrap" style="display:none"><input type="text" id="follow-prompt" placeholder="Follow us to unlock the link!"></div>
-        <div class="check-row"><input type="checkbox" id="email-capture"><label for="email-capture"><strong>Email Capture</strong><small>Ask for email in the DM flow</small></label></div>
-        <div class="input-group" id="email-prompt-wrap" style="display:none"><input type="text" id="email-prompt" placeholder="What's your best email?"></div>
+        <div class="section-label">SuperProfile Conversions Gate</div>
+        <div class="check-row">
+          <input type="checkbox" id="ask-follow">
+          <label for="ask-follow"><strong>Ask for Follow before DM</strong><small>Require users to follow your account to unlock the DM payload</small></label>
+        </div>
+        <div class="input-group" id="follow-prompt-wrap" style="display:none">
+          <label>Follow Prompt message</label>
+          <textarea id="follow-prompt" rows="2" placeholder="Follow us to unlock the link!"></textarea>
+        </div>
+        
+        <div class="check-row">
+          <input type="checkbox" id="email-capture">
+          <label for="email-capture"><strong>Collect Email Gate</strong><small>Collect and save user email address inside your lead list</small></label>
+        </div>
+        <div class="input-group" id="email-prompt-wrap" style="display:none">
+          <label>Email Prompt message</label>
+          <textarea id="email-prompt" rows="2" placeholder="What's your best email address?"></textarea>
+        </div>
+        
+        <div class="input-group">
+          <label style="margin-bottom:6px;display:block;">DM Type</label>
+          <select id="auto-dm-type" onchange="toggleDMTypeButtons()" style="width:100%;padding:10px 14px;border:1px solid #d1d5db;border-radius:10px;font-size:14px;outline:none;background:#fff;">
+            <option value="text_only">Text Only</option>
+            <option value="text_button" selected>Text + Button</option>
+          </select>
+        </div>
+
+        <div id="btn-builder-section">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 6px;">
+            <label style="font-weight:600;font-size:13px;color:#374151;">Buttons</label>
+          </div>
+          <div id="btn-cards-container"></div>
+        </div>
+
+        <div class="input-group">
+          <label>Send Delay (seconds)</label>
+          <input type="number" id="auto-delay" min="0" max="60" value="0" style="max-width:110px;padding:11px 14px;border:1px solid #d1d5db;border-radius:10px;font-size:14px;outline:none">
+        </div>
+      </div>
+
+      <div class="step" id="step-4">
+        <div class="preview-split">
+          <div>
+            <div class="step-title">Preview & Save</div>
+            <div class="step-sub">Review simulated visual layout of your automations.</div>
+            
+            <div id="preview-comment-block" class="preview-comment-block" style="display:none">
+              <strong>Public Comment Reply:</strong>
+              <div style="margin-top:6px;padding:8px;background:#fff;border-radius:6px;border:1px solid #f3f4f6">
+                <span style="color:#db2777;font-weight:700">@username</span> <span id="p-comm-text"></span>
+              </div>
+            </div>
+            
+            <div style="font-size:12px;color:#6b7280;line-height:1.5;margin-top:14px">
+              <p>📌 <strong>Ask for Follow Gate:</strong> If active, users will receive the follow prompt first, and the link/DM only unlocks once they reply.</p>
+              <p style="margin-top:6px">📩 <strong>Collect Email:</strong> Users will be asked for their email address, which is automatically saved in your Leads database.</p>
+            </div>
+          </div>
+          <div>
+            <div class="preview-phone">
+              <div class="phone-header"><div class="phone-avatar"></div><span>Instagram Direct</span></div>
+              <div class="phone-body" id="p-phone-body">
+                <div class="msg-bubble msg-incoming">User Message/Trigger</div>
+                <div class="msg-bubble msg-outgoing" id="p-msg-follow" style="display:none">Follow prompt message</div>
+                <div class="msg-bubble msg-outgoing" id="p-msg-dm">DM message text</div>
+                <div class="phone-btn" id="p-link-btn" style="display:none">Visit Link</div>
+                <div class="msg-bubble msg-outgoing" id="p-msg-email" style="display:none">Email prompt message</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -3471,32 +4049,188 @@ INSTAGRAM_HTML = """
 </div>
 
 <script>
-let currentStep=1,totalSteps=6,selectedTrigger=null,selectedScope=null,selectedPostIds={},selectedKwType=null,selectedAction='both',keywords=[],postsLoaded=false,editingIdx=-1;
+let currentStep=1,totalSteps=4,selectedTrigger=null,selectedScope=null,selectedPostIds={},selectedKwType=null,selectedAction='both',keywords=[],postsLoaded=false,editingIdx=-1;
+let spWizardButtons = [];
 
-document.getElementById('ask-follow').onchange=e=>{document.getElementById('follow-prompt-wrap').style.display=e.target.checked?'block':'none'};
-document.getElementById('email-capture').onchange=e=>{document.getElementById('email-prompt-wrap').style.display=e.target.checked?'block':'none'};
+document.getElementById('ask-follow').onchange=e=>{
+  document.getElementById('follow-prompt-wrap').style.display=e.target.checked?'block':'none';
+  updatePreview();
+};
+document.getElementById('email-capture').onchange=e=>{
+  document.getElementById('email-prompt-wrap').style.display=e.target.checked?'block':'none';
+  updatePreview();
+};
+
+['auto-reply','auto-dm','follow-prompt','email-prompt'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', updatePreview);
+});
+
+function toggleDMTypeButtons() {
+  const val = document.getElementById('auto-dm-type').value;
+  const section = document.getElementById('btn-builder-section');
+  if (val === 'text_button') {
+    section.style.display = 'block';
+    spRenderWizardButtons();
+  } else {
+    section.style.display = 'none';
+  }
+  updatePreview();
+}
+
+function spRenderWizardButtons() {
+  const container = document.getElementById('btn-cards-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (spWizardButtons.length === 0) {
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.style.cssText = 'width:100%;padding:10px;font-size:13px;border-radius:8px;margin-top:4px;border:1px dashed #ccc;background:#f9f9f9;cursor:pointer;';
+    addBtn.textContent = '+ Add a button';
+    addBtn.onclick = spAddWizardButton;
+    container.appendChild(addBtn);
+    return;
+  }
+
+  spWizardButtons.forEach((btn, idx) => {
+    const card = document.createElement('div');
+    card.style.cssText = 'background:#fcfcfc;border:1px dashed #d1d5db;border-radius:10px;padding:12px;position:relative;margin-bottom:8px;';
+
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:12px;font-weight:600;color:#6b21a8;">Button #${idx + 1}</span>
+        <button type="button" onclick="spRemoveWizardButton(${idx})"
+          style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#ef4444;font-size:11px;cursor:pointer;padding:2px 7px;border-radius:5px;">
+          ✕ Remove
+        </button>
+      </div>
+      <div style="margin-bottom:8px;">
+        <input type="text" placeholder="Button Title (e.g. Claim Now!)" maxlength="20" value="${btn.title || ''}"
+          oninput="spUpdateWizardButtonData(${idx},'title',this.value);spUpdateWizardButtonCharCounter(${idx},this.value.length);updatePreview();"
+          style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;outline:none;box-sizing:border-box;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">
+          <span style="font-size:10px;color:#6b7280;">Max 20 chars (Meta limit)</span>
+          <span id="sp-wz-btn-cnt-${idx}" style="font-size:10px;color:#6b7280;">${(btn.title||'').length}/20</span>
+        </div>
+      </div>
+      <div style="margin-bottom:0;">
+        <input type="url" placeholder="🔗 Paste link here (optional)" value="${btn.url || ''}"
+          oninput="spUpdateWizardButtonData(${idx},'url',this.value);updatePreview();"
+          style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;outline:none;box-sizing:border-box;">
+      </div>`;
+    container.appendChild(card);
+  });
+
+  if (spWizardButtons.length < 3) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.style.cssText = 'width:100%;padding:8px;font-size:12px;border-radius:8px;margin-top:4px;border:1px dashed #ccc;background:#f9f9f9;cursor:pointer;';
+    more.textContent = '+ Add another button';
+    more.onclick = spAddWizardButton;
+    container.appendChild(more);
+  }
+}
+
+function spAddWizardButton() {
+  if (spWizardButtons.length >= 3) { alert('Meta allows a maximum of 3 buttons.'); return; }
+  spWizardButtons.push({ title: '', url: '' });
+  spRenderWizardButtons();
+  updatePreview();
+}
+
+function spRemoveWizardButton(idx) {
+  spWizardButtons.splice(idx, 1);
+  spRenderWizardButtons();
+  updatePreview();
+}
+
+function spUpdateWizardButtonData(idx, key, val) {
+  if (spWizardButtons[idx]) spWizardButtons[idx][key] = val;
+}
+
+function spUpdateWizardButtonCharCounter(idx, len) {
+  const el = document.getElementById(`sp-wz-btn-cnt-${idx}`);
+  if (el) el.textContent = `${len}/20`;
+}
+
+function updatePreview(){
+  const trigger = selectedTrigger || 'comment';
+  const hasComment = ['comment','live'].includes(trigger);
+  
+  if(hasComment && document.getElementById('auto-reply').value.trim()){
+    document.getElementById('preview-comment-block').style.display = 'block';
+    document.getElementById('p-comm-text').textContent = document.getElementById('auto-reply').value;
+  } else {
+    document.getElementById('preview-comment-block').style.display = 'none';
+  }
+  
+  const askFollow = document.getElementById('ask-follow').checked;
+  const followPrompt = document.getElementById('follow-prompt').value.trim() || 'Follow us to unlock the link!';
+  if(askFollow){
+    document.getElementById('p-msg-follow').style.display = 'block';
+    document.getElementById('p-msg-follow').textContent = followPrompt;
+  } else {
+    document.getElementById('p-msg-follow').style.display = 'none';
+  }
+  
+  const dmMsg = document.getElementById('auto-dm').value.trim() || 'Hi {username}! Here is the content...';
+  document.getElementById('p-msg-dm').textContent = dmMsg;
+  
+  // Clear old preview custom buttons
+  document.querySelectorAll('.p-preview-custom-btn').forEach(el => el.remove());
+  document.getElementById('p-link-btn').style.display = 'none';
+  
+  const dmType = document.getElementById('auto-dm-type').value;
+  if(dmType === 'text_button' && spWizardButtons.length > 0) {
+    spWizardButtons.forEach(btn => {
+      if (btn.title && btn.title.trim()) {
+        const pBtn = document.createElement('div');
+        pBtn.className = 'phone-btn p-preview-custom-btn';
+        pBtn.style.display = 'block';
+        if (btn.url && btn.url.trim()) {
+          pBtn.textContent = '🔗 ' + btn.title.trim();
+        } else {
+          pBtn.textContent = '👉 ' + btn.title.trim();
+        }
+        document.getElementById('p-phone-body').appendChild(pBtn);
+      }
+    });
+  }
+  
+  const emailCapture = document.getElementById('email-capture').checked;
+  const emailPrompt = document.getElementById('email-prompt').value.trim() || "What's your best email address?";
+  if(emailCapture){
+    document.getElementById('p-msg-email').style.display = 'block';
+    document.getElementById('p-msg-email').textContent = emailPrompt;
+  } else {
+    document.getElementById('p-msg-email').style.display = 'none';
+  }
+}
 
 function openModal(d,idx){
   editingIdx=idx!==undefined?idx:-1; currentStep=1; selectedTrigger=null; selectedScope=null; selectedPostIds={}; selectedKwType=null; selectedAction='both'; keywords=[]; postsLoaded=false;
+  spWizardButtons = [];
+  document.querySelectorAll('.picker-card').forEach(c=>c.classList.remove('selected'));
   document.querySelectorAll('.option-card').forEach(c=>c.classList.remove('selected'));
-  ['auto-name','auto-reply','auto-dm','auto-link','auto-followup','follow-prompt','email-prompt'].forEach(id=>document.getElementById(id).value='');
+  ['auto-name','auto-reply','auto-dm','follow-prompt','email-prompt'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('auto-dm-type').value='text_button';
   document.getElementById('auto-delay').value='0';
   document.getElementById('ask-follow').checked=false; document.getElementById('email-capture').checked=false;
   document.getElementById('follow-prompt-wrap').style.display='none'; document.getElementById('email-prompt-wrap').style.display='none';
   document.getElementById('kw-tags').innerHTML=''; document.getElementById('kw-input-area').style.display='none';
   if(d){
     selectedTrigger=d.trigger_type||'comment'; selectedScope=d.scope||'all'; selectedKwType=d.keyword_type||'any'; selectedAction=d.action||'both'; keywords=d.keywords||[];
-    document.getElementById('trigger-'+selectedTrigger).classList.add('selected');
-    document.getElementById('scope-'+selectedScope).classList.add('selected');
-    document.getElementById('kw-'+selectedKwType).classList.add('selected');
-    document.getElementById('action-'+selectedAction).classList.add('selected');
+    const triggerCard = document.getElementById('trigger-'+selectedTrigger);
+    if(triggerCard) triggerCard.classList.add('selected');
+    const scopeCard = document.getElementById('scope-'+selectedScope);
+    if(scopeCard) scopeCard.classList.add('selected');
+    const kwCard = document.getElementById('kw-'+selectedKwType);
+    if(kwCard) kwCard.classList.add('selected');
     if(selectedKwType==='specific') document.getElementById('kw-input-area').style.display='block';
     renderTags();
     document.getElementById('auto-name').value=d.name||'';
     document.getElementById('auto-reply').value=d.reply||'';
     document.getElementById('auto-dm').value=d.dm_message||'';
-    document.getElementById('auto-link').value=d.link_url||'';
-    document.getElementById('auto-followup').value=d.follow_up_message||'';
     document.getElementById('auto-delay').value=d.delay_seconds||0;
     document.getElementById('ask-follow').checked=!!d.ask_follow;
     document.getElementById('follow-prompt').value=d.follow_prompt||'';
@@ -3505,32 +4239,85 @@ function openModal(d,idx){
     if(d.ask_follow) document.getElementById('follow-prompt-wrap').style.display='block';
     if(d.email_capture) document.getElementById('email-prompt-wrap').style.display='block';
     (d.post_ids||[]).forEach(pid=>{selectedPostIds[pid]={id:pid,thumbnail:d.thumbnail||''};});
+    
+    if (d.buttons && d.buttons.length > 0) {
+      spWizardButtons = d.buttons.map(b => ({ title: b.title || '', url: b.url || '' }));
+      document.getElementById('auto-dm-type').value = 'text_button';
+    } else if (d.button_label || d.link_url) {
+      spWizardButtons = [{ title: d.button_label || '', url: d.link_url || '' }];
+      document.getElementById('auto-dm-type').value = 'text_button';
+    } else {
+      spWizardButtons = [];
+      document.getElementById('auto-dm-type').value = 'text_only';
+    }
   }
-  updateSections(); showStep(1); document.getElementById('modal-overlay').classList.add('open');
+  toggleDMTypeButtons();
+  showStep(1); document.getElementById('modal-overlay').classList.add('open');
 }
 function editAuto(i,d){postsLoaded=false;openModal(d,i);}
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open');}
-function selectTrigger(t){selectedTrigger=t;document.querySelectorAll('[id^="trigger-"]').forEach(c=>c.classList.remove('selected'));document.getElementById('trigger-'+t).classList.add('selected');}
-function selectScope(s){selectedScope=s;document.querySelectorAll('[id^="scope-"]').forEach(c=>c.classList.remove('selected'));document.getElementById('scope-'+s).classList.add('selected');}
-function selectKwType(t){selectedKwType=t;document.querySelectorAll('[id^="kw-"]').forEach(c=>c.classList.remove('selected'));document.getElementById('kw-'+t).classList.add('selected');document.getElementById('kw-input-area').style.display=t==='specific'?'block':'none';}
-function selectAction(a){selectedAction=a;document.querySelectorAll('[id^="action-"]').forEach(c=>c.classList.remove('selected'));document.getElementById('action-'+a).classList.add('selected');updateSections();}
+function selectTrigger(t){
+  selectedTrigger=t;
+  document.querySelectorAll('.picker-card').forEach(c=>c.classList.remove('selected'));
+  const card=document.getElementById('trigger-'+t);
+  if(card)card.classList.add('selected');
+  nextStep();
+}
+async function selectScope(s){
+  selectedScope=s;
+  document.querySelectorAll('[id^="scope-"]').forEach(c=>c.classList.remove('selected'));
+  const card=document.getElementById('scope-'+s);
+  if(card)card.classList.add('selected');
+  
+  if(s==='specific'){
+    document.getElementById('media-grid-container').style.display='block';
+    if(!postsLoaded) await loadPostsGrid();
+  } else {
+    document.getElementById('media-grid-container').style.display='none';
+  }
+}
+function selectKwType(t){
+  selectedKwType=t;
+  document.querySelectorAll('[id^="kw-"]').forEach(c=>c.classList.remove('selected'));
+  const card=document.getElementById('kw-'+t);
+  if(card)card.classList.add('selected');
+  document.getElementById('kw-input-area').style.display=t==='specific'?'block':'none';
+}
 function addKwTag(){const v=document.getElementById('kw-input').value.trim();if(v&&!keywords.includes(v)){keywords.push(v);document.getElementById('kw-input').value='';renderTags();}}
 function removeTag(i){keywords.splice(i,1);renderTags();}
 function renderTags(){document.getElementById('kw-tags').innerHTML=keywords.map((k,i)=>`<span class="kw-tag">${k}<button onclick="removeTag(${i})">×</button></span>`).join('');}
-function updateSections(){
-  const showComment=selectedAction==='comment'||selectedAction==='both';
-  const showDm=selectedAction==='dm'||selectedAction==='both';
-  const noCommentTrigger=['dm','welcome','mention'].includes(selectedTrigger);
-  document.getElementById('comment-section').style.display=showComment&&!noCommentTrigger?'block':'none';
-  document.getElementById('dm-section').style.display=showDm?'block':'none';
-}
+
 function showStep(n){
+  currentStep = n;
   document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));
   document.getElementById('step-'+n).classList.add('active');
   document.getElementById('btn-back').style.display=n>1?'block':'none';
-  document.getElementById('btn-next').textContent=n===totalSteps?(editingIdx>=0?'✓ Save':'✓ Save'):'Next →';
-  for(let i=1;i<=totalSteps;i++) document.getElementById('dot-'+i).classList.toggle('active',i===n);
-  if(n===6) updateSections();
+  document.getElementById('btn-next').textContent=n===totalSteps?'Save Rule':'Next →';
+  for(let i=1;i<=totalSteps;i++) {
+    const dot = document.getElementById('dot-'+i);
+    if(dot) dot.classList.toggle('active',i===n);
+  }
+  
+  if(n===2){
+    if(selectedTrigger==='comment'){
+      document.getElementById('post-select-section').style.display='block';
+      if(selectedScope==='specific'){
+        document.getElementById('media-grid-container').style.display='block';
+      } else {
+        document.getElementById('media-grid-container').style.display='none';
+      }
+    } else {
+      document.getElementById('post-select-section').style.display='none';
+    }
+  }
+  if(n===3){
+    const showComment=['comment','live'].includes(selectedTrigger);
+    document.getElementById('public-reply-section').style.display=showComment?'block':'none';
+    toggleDMTypeButtons();
+  }
+  if(n===4) {
+    updatePreview();
+  }
 }
 async function loadPostsGrid(){
   const grid=document.getElementById('posts-grid-modal'); grid.innerHTML='Loading...';
@@ -3545,7 +4332,7 @@ async function loadPostsGrid(){
     }
     const posts = d.posts || [];
     if (posts.length === 0) {
-      grid.innerHTML = '<div style="color:#65676b;padding:20px;text-align:center;font-size:13px">No Instagram media found.</div>';
+      grid.innerHTML = '<div style="color:#6b7280;padding:20px;text-align:center;font-size:13px">No Instagram media found.</div>';
       return;
     }
     posts.forEach(post=>{
@@ -3559,54 +4346,93 @@ async function loadPostsGrid(){
   }
 }
 async function nextStep(){
-  const skipScope=['story','dm','welcome','mention'];
   if(currentStep===1){
-    if(!selectedTrigger)return alert('Choose a trigger');
-    if(skipScope.includes(selectedTrigger)){selectedScope='all';currentStep=4;}
-    else currentStep=2;
+    if(!selectedTrigger)return alert('Please select a trigger type');
+    showStep(2);
   }
   else if(currentStep===2){
-    if(!selectedScope)return alert('Choose scope');
-    if(['comment','live'].includes(selectedTrigger)&&selectedScope==='specific'){if(!postsLoaded)await loadPostsGrid();currentStep=3;}
-    else currentStep=4;
-  } else if(currentStep===3){if(!Object.keys(selectedPostIds).length)return alert('Select at least one post');currentStep=4;}
-  else if(currentStep===4){if(!selectedKwType)return alert('Choose keyword type');if(selectedKwType==='specific'&&!keywords.length)return alert('Add keywords');currentStep=5;}
-  else if(currentStep===5){if(!selectedAction)return alert('Choose action');currentStep=6;}
-  else{
+    const name=document.getElementById('auto-name').value.trim();
+    if(!name)return alert('Please enter an automation name');
+    if(selectedTrigger==='comment'){
+      if(!selectedScope)return alert('Please select media scope');
+      if(selectedScope==='specific'&&!Object.keys(selectedPostIds).length){
+        return alert('Please select at least one post/reel');
+      }
+    }
+    if(!selectedKwType)return alert('Please choose a trigger match condition');
+    if(selectedKwType==='specific'&&!keywords.length){
+      return alert('Please add at least one keyword');
+    }
+    showStep(3);
+  }
+  else if(currentStep===3){
+    const dm=document.getElementById('auto-dm').value.trim();
+    if(!dm)return alert('Please enter the initial DM message');
+    
+    const dmType = document.getElementById('auto-dm-type').value;
+    if (dmType === 'text_button') {
+      const validBtns = spWizardButtons.filter(b => b.title && b.title.trim());
+      if (validBtns.length === 0) {
+        return alert('Please add at least one button with a title.');
+      }
+      for (let b of validBtns) {
+        if (b.title.trim().length > 20) {
+          return alert('Button title cannot exceed 20 characters.');
+        }
+      }
+    }
+    
+    const delayVal = parseInt(document.getElementById('auto-delay').value)||0;
+    if(delayVal > 0 && (delayVal < 10 || delayVal > 60)){
+      return alert('Delay must be either 0 (instant) or between 10 and 60 seconds.');
+    }
+    
+    showStep(4);
+  }
+  else if(currentStep===4){
     const name=document.getElementById('auto-name').value.trim();
     const reply=document.getElementById('auto-reply').value.trim();
     const dm=document.getElementById('auto-dm').value.trim();
-    if(!name)return alert('Enter a name');
-    const noComment=['dm','welcome','mention'].includes(selectedTrigger);
-    if((selectedAction==='comment'||selectedAction==='both')&&!noComment&&!reply)return alert('Enter comment reply');
-    if((selectedAction==='dm'||selectedAction==='both')&&!dm)return alert('Enter AutoDM message');
     const posts=Object.values(selectedPostIds);
+    const hasComment = ['comment','live'].includes(selectedTrigger);
+    
+    const dmType = document.getElementById('auto-dm-type').value;
+    const isBtn = (dmType === 'text_button');
+    const validBtns = spWizardButtons.filter(b => b.title && b.title.trim());
+    
     const payload={
-      name,reply,action:selectedAction,dm_message:dm,trigger_type:selectedTrigger,
-      scope:['comment','live'].includes(selectedTrigger)?selectedScope:'all',
-      post_ids:Object.keys(selectedPostIds),thumbnail:posts.length?posts[0].thumbnail||'':'',
-      keyword_type:selectedKwType,keywords,active:true,
-      delay_seconds:parseInt(document.getElementById('auto-delay').value)||0,
-      link_url:document.getElementById('auto-link').value.trim(),
-      follow_up_message:document.getElementById('auto-followup').value.trim(),
-      ask_follow:document.getElementById('ask-follow').checked,
-      follow_prompt:document.getElementById('follow-prompt').value.trim(),
-      email_capture:document.getElementById('email-capture').checked,
-      email_prompt:document.getElementById('email-prompt').value.trim(),
+      name,
+      reply: hasComment ? reply : '',
+      action: hasComment ? (reply ? 'both' : 'dm') : 'dm',
+      dm_message: dm,
+      trigger_type: selectedTrigger,
+      scope: ['comment','live'].includes(selectedTrigger)?selectedScope:'all',
+      post_ids: Object.keys(selectedPostIds),
+      thumbnail: posts.length?posts[0].thumbnail||'':'',
+      keyword_type: selectedKwType,
+      keywords,
+      active: true,
+      delay_seconds: parseInt(document.getElementById('auto-delay').value)||0,
+      button_enabled: isBtn ? 1 : 0,
+      button_label: (isBtn && validBtns.length > 0) ? validBtns[0].title : '',
+      link_button_label: (isBtn && validBtns.length > 0) ? validBtns[0].title : '',
+      link_url: (isBtn && validBtns.length > 0) ? validBtns[0].url : '',
+      buttons: validBtns,
+      ask_follow: document.getElementById('ask-follow').checked,
+      follow_prompt: document.getElementById('follow-prompt').value.trim(),
+      email_capture: document.getElementById('email-capture').checked,
+      email_prompt: document.getElementById('email-prompt').value.trim(),
     };
+    
     const url=editingIdx>=0?'/instagram/ui/automations/'+editingIdx:'/instagram/ui/automations';
     await fetch(url,{method:editingIdx>=0?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     closeModal(); location.reload(); return;
   }
-  showStep(currentStep);
 }
 function prevStep(){
-  const skipScope=['story','dm','welcome','mention'];
-  if(currentStep===4&&skipScope.includes(selectedTrigger))currentStep=1;
-  else if(currentStep===4&&(!['comment','live'].includes(selectedTrigger)||selectedScope==='all'))currentStep=2;
-  else if(currentStep===4&&selectedScope==='specific')currentStep=3;
-  else currentStep--;
-  showStep(currentStep);
+  if(currentStep > 1){
+    showStep(currentStep - 1);
+  }
 }
 async function toggleAuto(i,a){await fetch('/instagram/ui/automations/'+i+'/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({active:a})});}
 async function deleteAuto(i){if(confirm('Delete?')){await fetch('/instagram/ui/automations/'+i,{method:'DELETE'});location.reload();}}
@@ -3628,7 +4454,7 @@ async function saveDailyCap(){
 async function addGlobalKeyword(){const kw=document.getElementById('g-kw').value.trim(),r=document.getElementById('g-reply').value.trim();if(!kw||!r)return alert('Enter keyword and reply');await fetch('/instagram/ui/keywords',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keyword:kw,reply:r})});location.reload();}
 async function deleteKeyword(kw){if(confirm('Delete?')){await fetch('/instagram/ui/keywords/'+encodeURIComponent(kw),{method:'DELETE'});location.reload();}}
 document.getElementById('modal-overlay').onclick=e=>{if(e.target===document.getElementById('modal-overlay'))closeModal();};
-// Load settings on page load
+
 (async()=>{
   try{
     const r=await fetch('/instagram/ui/settings');const d=await r.json();
@@ -3767,10 +4593,20 @@ def ig_fetch_media_api():
     except Exception as e:
         return jsonify({"error": str(e), "posts": []})
 
+@app.route("/instagram/ui/automations", methods=["GET"])
+def ig_list_automations():
+    autos = load_ig_automations()
+    return jsonify(autos)
+
 @app.route("/instagram/ui/automations", methods=["POST"])
 def ig_add_automation():
     autos = load_ig_automations()
-    autos.append(request.json)
+    payload = request.json
+    payload["total_runs"] = 0
+    payload["dms_sent"] = 0
+    payload["replies_sent"] = 0
+    payload["follow_gate_conversions"] = 0
+    autos.append(payload)
     save_ig_automations(autos)
     return jsonify({"ok": True})
 
@@ -3780,6 +4616,10 @@ def ig_edit_automation(idx):
     if 0 <= idx < len(autos):
         data = request.json
         data["active"] = autos[idx].get("active", True)
+        data["total_runs"] = autos[idx].get("total_runs", 0)
+        data["dms_sent"] = autos[idx].get("dms_sent", 0)
+        data["replies_sent"] = autos[idx].get("replies_sent", 0)
+        data["follow_gate_conversions"] = autos[idx].get("follow_gate_conversions", 0)
         autos[idx] = data
         save_ig_automations(autos)
     return jsonify({"ok": True})
@@ -3851,7 +4691,7 @@ def ig_test_automation(idx):
         prepend_str = "[TEST STORY MENTION]"
         
     resp = requests.post(
-        f"{GRAPH_URL}/{IG_USER_ID}/messages",
+        f"{GRAPH_URL}/me/messages",
         params={"access_token": PAGE_ACCESS_TOKEN},
         json={"recipient": {"id": target_id}, "message": {"text": f"{prepend_str} — {auto['name']}\n\n{dm_body}"}},
         timeout=8,
@@ -4027,6 +4867,16 @@ def ig_reset_stats():
     save_ig_stats({"comment_replies": 0, "dms_sent": 0, "story_replies": 0,
                    "live_replies": 0, "dm_triggers": 0, "mentions_handled": 0,
                    "dms_today": 0, "dms_today_date": ""})
+    with db_lock:
+        conn = get_db_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE ig_automations SET total_runs = 0, dms_sent = 0, replies_sent = 0, follow_gate_conversions = 0")
+            conn.commit()
+        except Exception as e:
+            print(f"[Reset Stats Error] Failed to reset ig_automations stats: {e}")
+        finally:
+            conn.close()
     return jsonify({"ok": True})
 
 @app.route("/instagram/ui/settings", methods=["GET", "POST"])
@@ -4591,11 +5441,27 @@ def ig_status_check():
         data = resp.json()
         ig_id = data.get("instagram_business_account", {}).get("id")
         if ig_id:
+            # Fetch IG Profile details (username, profile_picture_url)
+            try:
+                ig_resp = requests.get(
+                    f"{GRAPH_URL}/{ig_id}",
+                    params={"fields": "username,profile_picture_url", "access_token": PAGE_ACCESS_TOKEN},
+                    timeout=8
+                )
+                ig_data = ig_resp.json()
+                username = ig_data.get("username", "Instagram Account")
+                profile_pic = ig_data.get("profile_picture_url", "")
+            except Exception as pe:
+                print(f"[IG Status Check Profile Info Fail] {pe}")
+                username = "Instagram Account"
+                profile_pic = ""
             return jsonify({
                 "ok": True,
                 "linked": True,
                 "business_account_id": ig_id,
-                "message": "Account validation successful. Connected to Instagram Business/Creator account."
+                "username": username,
+                "profile_picture_url": profile_pic,
+                "message": f"Connected to Instagram account @{username}"
             })
         else:
             return jsonify({
