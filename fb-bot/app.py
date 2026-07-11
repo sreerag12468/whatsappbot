@@ -2351,7 +2351,7 @@ def perform_ig_button_template_send(recipient_id, follow_up_message, link_url, l
     except Exception as e:
         return False, str(e)
 
-def send_ig_private_reply(comment_id, message, recipient_id=None, automation_name=None, delay=0, run_id=None):
+def send_ig_private_reply(comment_id, message, recipient_id=None, automation_name=None, delay=0, run_id=None, quick_replies=None):
     queue_ig_message(
         recipient_id=recipient_id,
         text=message,
@@ -2359,7 +2359,8 @@ def send_ig_private_reply(comment_id, message, recipient_id=None, automation_nam
         is_private_reply=True,
         automation_name=automation_name,
         delay=delay,
-        run_id=run_id
+        run_id=run_id,
+        quick_replies=quick_replies
     )
 
 def send_ig_dm(user_id, message, automation_name=None, delay=0, run_id=None):
@@ -2703,10 +2704,25 @@ def send_ig_automation_dm(auto, user_id, username="", comment_id=None, delay=0, 
         
         if triggered_from_comment:
             if has_buttons or has_email or has_followups:
-                # We have a sequence/buttons. Send a plain private reply first to open the 24h window.
-                private_reply_text = "Hey! Thanks for commenting! Check the options below:"
-                send_ig_private_reply(comment_id, private_reply_text, recipient_id=user_id, automation_name=auto.get("name"), delay=delay, run_id=run_id)
-                button_delay = delay + 5
+                # Determine button label
+                btn_title = "Send details 📩"
+                if auto.get("buttons"):
+                    btn_title = auto.get("buttons")[0].get("title") or "Send details 📩"
+                elif auto.get("button_label"):
+                    btn_title = auto.get("button_label")
+                elif steps and steps[0].get("button_label"):
+                    btn_title = steps[0].get("button_label")
+                
+                quick_replies = [
+                    {
+                        "content_type": "text",
+                        "title": btn_title[:20],
+                        "payload": f"IGDETAILS_TAP_{auto.get('id')}_{run_id}"
+                    }
+                ]
+                private_reply_text = "Hey! Thanks for commenting! Tap below to get the details:"
+                send_ig_private_reply(comment_id, private_reply_text, recipient_id=user_id, automation_name=auto.get("name"), delay=delay, run_id=run_id, quick_replies=quick_replies)
+                return True
             else:
                 # Simple text-only DM. Send it directly as the private reply.
                 send_ig_private_reply(comment_id, dm_body, recipient_id=user_id, automation_name=auto.get("name"), delay=delay, run_id=run_id)
@@ -3086,6 +3102,18 @@ def handle_ig_messaging(event):
                 "event": "IG_SEND_DETAILS_error",
                 "error": error_str
             })
+    if postback_payload.startswith("IGDETAILS_TAP_"):
+        try:
+            parts = postback_payload.split("_")
+            auto_id = int(parts[2])
+            run_id = parts[3] if len(parts) >= 4 else None
+            auto = get_ig_automation_by_id(auto_id)
+            if auto:
+                print(f"[Details Tap] User {sender_id} tapped details for auto {auto_id}. Launching standard DM.", flush=True)
+                username = event.get("sender", {}).get("username", "")
+                send_ig_automation_dm(auto, sender_id, username, comment_id=None, delay=0, run_id=run_id)
+        except Exception as e:
+            print(f"[Details Tap Error] Failed to process: {e}", flush=True)
         return
 
     if postback_payload.startswith("IGBTN_MULTI_"):
