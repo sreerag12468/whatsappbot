@@ -2011,6 +2011,8 @@ def reply_to_ig_comment(comment_id, message):
         print(f"  [IG Comment Reply failed] ❌ → {result}")
 
 
+ig_debug_events = []
+
 IG_USER_INTERACTIONS_FILE = os.path.join(BASE_DIR, "ig_user_interactions.json")
 
 def load_ig_user_interactions():
@@ -2977,11 +2979,24 @@ def handle_ig_messaging(event):
     if postback_payload.startswith("IG_SEND_DETAILS_"):
         try:
             auto_id = int(postback_payload.split("_")[-1])
+            ig_debug_events.append({
+                "time": time.time(),
+                "event": "IG_SEND_DETAILS_received",
+                "payload": postback_payload,
+                "sender_id": sender_id,
+                "auto_id": auto_id
+            })
             auto = get_ig_automation_by_id(auto_id)
             if auto:
                 username = event.get("sender", {}).get("username", "")
                 if auto.get("ask_follow") and auto.get("follow_prompt"):
                     is_following, api_username = check_if_user_follows(sender_id)
+                    ig_debug_events.append({
+                        "time": time.time(),
+                        "event": "IG_SEND_DETAILS_follow_gate_check",
+                        "is_following": is_following,
+                        "api_username": api_username
+                    })
                     if is_following:
                         increment_ig_automation_counter(auto["name"], "follow_gate_conversions")
                         send_ig_automation_dm(auto, sender_id, api_username or username, comment_id=None, delay=0)
@@ -3008,9 +3023,26 @@ def handle_ig_messaging(event):
                         }
                         save_ig_conv_state(conv_state)
                 else:
+                    ig_debug_events.append({
+                        "time": time.time(),
+                        "event": "IG_SEND_DETAILS_send_dm_payload",
+                        "sender_id": sender_id
+                    })
                     send_ig_automation_dm(auto, sender_id, username, comment_id=None, delay=0)
+            else:
+                ig_debug_events.append({
+                    "time": time.time(),
+                    "event": "IG_SEND_DETAILS_auto_not_found",
+                    "auto_id": auto_id
+                })
         except Exception as e:
+            error_str = str(e)
             print(f"[IG_SEND_DETAILS Error] Failed to process: {e}", flush=True)
+            ig_debug_events.append({
+                "time": time.time(),
+                "event": "IG_SEND_DETAILS_error",
+                "error": error_str
+            })
         return
 
     if postback_payload.startswith("IGFOLLOW_YES_"):
@@ -5758,7 +5790,8 @@ def ig_debug_logs():
             "queue": queue,
             "logs_len": len(logs),
             "logs": logs[-30:],
-            "interactions": list(interactions.items())[-20:]
+            "interactions": list(interactions.items())[-20:],
+            "debug_events": ig_debug_events[-50:]
         })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
@@ -5794,6 +5827,12 @@ def webhook():
     data = request.json
     obj  = data.get("object")
     print(f"[Webhook Received] object={obj} payload={json.dumps(data)}")
+    if obj == "instagram":
+        ig_debug_events.append({
+            "time": time.time(),
+            "event": "instagram_webhook_received",
+            "payload": data
+        })
     for entry in data.get("entry", []):
         # Instagram webhooks (separate automation engine)
         if obj == "instagram":
