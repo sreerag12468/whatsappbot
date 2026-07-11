@@ -2413,13 +2413,14 @@ def ig_queue_worker():
             comment_id = msg_task.get("comment_id")
             
             # Rule 3: One automated DM per user per 24-hour period from a comment or story trigger
-            if automation_name != "manual" and recipient_id:
+            if automation_name != "manual" and recipient_id and not is_private_reply:
                 twenty_four_hours_ago = time.time() - 86400
                 already_sent_24h = any(
                     log.get("recipient_id") == recipient_id and 
                     log.get("sent_at", 0) >= twenty_four_hours_ago and 
                     log.get("status") == "success" and
-                    log.get("is_automated", True)
+                    log.get("is_automated", True) and
+                    not log.get("is_private_reply", False)
                     for log in logs
                 )
                 if already_sent_24h:

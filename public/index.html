@@ -2008,12 +2008,17 @@ let igFollowUpSteps = [];
 function openEditIgRuleModal(idx) {
   editingIgRuleIdx = idx;
   const rule = igRules[idx];
+  
+  igwzGoToStep(1);
+  igwzReset(); // Reset first to clear previous wizard state!
+  
   igwzData = {
     type: rule.trigger_type || 'comment',
     name: rule.name || '',
     trigger: (rule.keywords && rule.keywords.length > 0) ? 'keyword' : 'all',
-    keywords: rule.keywords || [],
+    keywords: rule.keywords ? [...rule.keywords] : [],
     scope: rule.scope || 'all',
+    post_ids: rule.post_ids ? [...rule.post_ids] : [],
     dmMessage: rule.dm_message || '',
     publicReply: rule.reply || '',
     askFollow: !!rule.ask_follow,
@@ -2023,9 +2028,20 @@ function openEditIgRuleModal(idx) {
     linkUrl: rule.link_url || '',
     delaySeconds: rule.delay_seconds || 0
   };
+  
+  igwzSelectedPostIds = {};
+  if (rule.post_ids && Array.isArray(rule.post_ids)) {
+    rule.post_ids.forEach(id => {
+      igwzSelectedPostIds[id] = { id: id };
+    });
+  }
+  
+  const count = igwzData.post_ids.length;
+  const countEl = document.getElementById('igwz-post-count');
+  if (countEl) countEl.textContent = count > 0 ? `${count} post${count>1?'s':''} selected` : '';
+  
   igFollowUpSteps = rule.follow_up_steps ? JSON.parse(JSON.stringify(rule.follow_up_steps)) : [];
-  igwzGoToStep(1);
-  igwzReset();
+  
   // pre-select type card
   if (igwzData.type) {
     const card = document.getElementById('igwz-type-' + igwzData.type);
