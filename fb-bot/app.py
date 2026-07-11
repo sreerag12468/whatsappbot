@@ -2737,6 +2737,41 @@ def check_if_user_follows(user_id):
 
 
 def send_ig_automation_dm(auto, user_id, username="", comment_id=None, delay=0, run_id=None):
+    if auto.get("ask_follow") and user_id:
+        is_following, api_username = check_if_user_follows(user_id)
+        if not is_following:
+            prompt_text = auto.get("follow_prompt") or "Please follow us to get the link"
+            quick_replies = [
+                {
+                    "content_type": "text",
+                    "title": "followed",
+                    "payload": f"IGFOLLOW_YES_{auto.get('id')}_{run_id}"
+                }
+            ]
+            if comment_id:
+                send_ig_private_reply(
+                    comment_id, 
+                    prompt_text, 
+                    recipient_id=user_id, 
+                    automation_name=auto.get("name"), 
+                    delay=delay, 
+                    run_id=run_id, 
+                    quick_replies=quick_replies
+                )
+            else:
+                queue_ig_message(
+                    recipient_id=user_id,
+                    text=prompt_text,
+                    comment_id=None,
+                    is_private_reply=False,
+                    automation_name=auto.get("name"),
+                    delay=delay,
+                    quick_replies=quick_replies,
+                    run_id=run_id
+                )
+            increment_ig_automation_counter_by_id(auto.get("id"), "dms_sent")
+            return True
+
     action = auto.get("action", "both")
     if action == "flow" and auto.get("link_url") and user_id:
         if comment_id:
@@ -2932,65 +2967,12 @@ def run_ig_automations(trigger_type, text, media_id="", comment_id="", user_id="
         # Unique run_id per trigger match event
         run_id = f"{auto.get('id')}:{user_id}:{int(time.time()*1000)}"
 
-        # Handle "Ask for Follow" Gate
-        # Only run immediately for non-comment triggers.
-        # For comments, the follow gate is checked inside the details button handler.
-        if auto.get("ask_follow") and auto.get("follow_prompt") and user_id and trigger_type != "comment":
-            conv_state = load_ig_conv_state()
-            user_state = conv_state.get(str(user_id))
-            if not user_state or user_state.get("step") != "awaiting_follow":
-                is_following, api_username = check_if_user_follows(user_id)
-                if is_following:
-                    print(f"  [Follow Gate] User {user_id} is already following. Skipping gate.", flush=True)
-                    send_ig_automation_dm(auto, user_id, api_username or username, comment_id, delay, run_id=run_id)
-                else:
-                    if comment_id:
-                        # Send a simple private reply first to open the 24-hour window
-                        send_ig_private_reply(comment_id, "Check your DMs to get the link! 📩", recipient_id=user_id, automation_name=auto.get("name"), delay=delay, run_id=run_id)
-                        # Give the private reply enough time to be processed and open the window
-                        button_delay = delay + 5
-                    else:
-                        button_delay = delay
-
-                    follow_dm_text = f"{auto['follow_prompt']}\n\nDid you follow us?"
-                    quick_replies = [
-                        {"content_type": "text", "title": "Yes", "payload": f"IGFOLLOW_YES_{auto.get('id')}_{run_id}"},
-                        {"content_type": "text", "title": "No", "payload": f"IGFOLLOW_NO_{auto.get('id')}_{run_id}"}
-                    ]
-                    queue_ig_message(
-                        recipient_id=user_id,
-                        text=follow_dm_text,
-                        comment_id=None,
-                        is_private_reply=False,
-                        automation_name=auto.get("name"),
-                        delay=button_delay,
-                        quick_replies=quick_replies,
-                        from_comment=bool(comment_id),
-                        run_id=run_id
-                    )
-                    increment_ig_automation_counter(auto["name"], "dms_sent")
-                    
-                    conv_state[str(user_id)] = {
-                        "step": "awaiting_follow",
-                        "automation_name": auto.get("name"),
-                        "updatedAt": int(time.time() * 1000)
-                    }
-                    save_ig_conv_state(conv_state)
-                
-                if action in ("comment", "both") and auto.get("reply") and comment_id:
-                    reply_to_ig_comment(comment_id, personalize_ig_message(auto["reply"], username))
-                    increment_ig_automation_counter(auto["name"], "replies_sent")
-                return True
-            else:
-                return True
-
         if action in ("comment", "both") and auto.get("reply") and comment_id:
             reply_to_ig_comment(comment_id, personalize_ig_message(auto["reply"], username))
             increment_ig_automation_counter(auto["name"], "replies_sent")
 
         send_ig_automation_dm(auto, user_id, username, comment_id, delay, run_id=run_id)
         return True
-    return False
     return False
 
 
@@ -3140,10 +3122,9 @@ def handle_ig_messaging(event):
                         increment_ig_automation_counter(auto["name"], "follow_gate_conversions")
                         send_ig_automation_dm(auto, sender_id, api_username or username, comment_id=None, delay=0)
                     else:
-                        follow_dm_text = f"{auto['follow_prompt']}\n\nDid you follow us?"
+                        follow_dm_text = auto.get("follow_prompt") or "Please follow us to get the link"
                         quick_replies = [
-                            {"content_type": "text", "title": "Yes", "payload": f"IGFOLLOW_YES_{auto.get('id')}"},
-                            {"content_type": "text", "title": "No", "payload": f"IGFOLLOW_NO_{auto.get('id')}"}
+                            {"content_type": "text", "title": "followed", "payload": f"IGFOLLOW_YES_{auto.get('id')}"}
                         ]
                         queue_ig_message(
                             recipient_id=sender_id,
@@ -3244,10 +3225,9 @@ def handle_ig_messaging(event):
                             del conv_state[str(sender_id)]
                     save_ig_conv_state(conv_state)
                 else:
-                    msg = "You must follow us to receive the link! Please follow our page, then tap 'Yes' again."
+                    msg = auto.get("follow_prompt") or "Please follow us to get the link"
                     quick_replies = [
-                        {"content_type": "text", "title": "Yes", "payload": f"IGFOLLOW_YES_{auto['id']}_{run_id}"},
-                        {"content_type": "text", "title": "No", "payload": f"IGFOLLOW_NO_{auto['id']}_{run_id}"}
+                        {"content_type": "text", "title": "followed", "payload": f"IGFOLLOW_YES_{auto['id']}_{run_id}"}
                     ]
                     queue_ig_message(
                         recipient_id=sender_id,
@@ -3270,10 +3250,9 @@ def handle_ig_messaging(event):
             run_id = parts[3] if len(parts) >= 4 else None
             auto = get_ig_automation_by_id(auto_id)
             if auto:
-                msg = "You must follow us to receive the link! Please follow our page, then tap 'Yes' again."
+                msg = auto.get("follow_prompt") or "Please follow us to get the link"
                 quick_replies = [
-                    {"content_type": "text", "title": "Yes", "payload": f"IGFOLLOW_YES_{auto['id']}_{run_id}"},
-                    {"content_type": "text", "title": "No", "payload": f"IGFOLLOW_NO_{auto['id']}_{run_id}"}
+                    {"content_type": "text", "title": "followed", "payload": f"IGFOLLOW_YES_{auto['id']}_{run_id}"}
                 ]
                 queue_ig_message(
                     recipient_id=sender_id,
