@@ -5784,6 +5784,17 @@ def ig_debug_logs():
         queue = load_ig_messages_queue()
         logs = load_ig_messages_log()
         interactions = load_ig_user_interactions()
+        
+        # Query subscriptions on the server
+        sub_info = {}
+        if PAGE_ID and PAGE_ACCESS_TOKEN:
+            try:
+                url = f"{GRAPH_URL}/{PAGE_ID}/subscribed_apps"
+                r = requests.get(url, params={"access_token": PAGE_ACCESS_TOKEN}, timeout=8)
+                sub_info = r.json()
+            except Exception as se:
+                sub_info = {"error": str(se)}
+                
         return jsonify({
             "ok": True,
             "queue_len": len(queue),
@@ -5791,7 +5802,10 @@ def ig_debug_logs():
             "logs_len": len(logs),
             "logs": logs[-30:],
             "interactions": list(interactions.items())[-20:],
-            "debug_events": ig_debug_events[-50:]
+            "debug_events": ig_debug_events[-50:],
+            "subscribed_apps": sub_info,
+            "page_id": PAGE_ID,
+            "ig_user_id": IG_USER_ID
         })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
