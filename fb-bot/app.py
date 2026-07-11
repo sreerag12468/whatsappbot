@@ -6184,6 +6184,34 @@ def get_token_health():
     finally:
         conn.close()
 
+@app.route("/instagram/ui/temp-sql-query", methods=["GET"])
+def temp_sql_query():
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        
+        # 1. ig_conv_state
+        cursor.execute("SELECT user_id, step, automation_name, updatedAt FROM ig_conv_state ORDER BY updatedAt DESC LIMIT 10")
+        conv_state = [dict(r) for r in cursor.fetchall()]
+        
+        # 2. ig_messages_log
+        cursor.execute("SELECT id, recipient_id, text, status, sent_at, run_id FROM ig_messages_log ORDER BY sent_at DESC LIMIT 15")
+        messages_log = [dict(r) for r in cursor.fetchall()]
+        
+        # 3. ig_automations
+        cursor.execute("SELECT id, name, ask_follow, follow_prompt, dm_message, action, button_enabled, buttons FROM ig_automations")
+        automations = [dict(r) for r in cursor.fetchall()]
+        
+        return jsonify({
+            "conv_state": conv_state,
+            "messages_log": messages_log,
+            "automations": automations
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
 
 if __name__ == "__main__":
     import threading
