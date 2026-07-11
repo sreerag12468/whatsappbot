@@ -2040,7 +2040,7 @@ def get_last_user_interaction_time(user_id):
     interactions = load_ig_user_interactions()
     return interactions.get(str(user_id))
 
-def queue_ig_message(recipient_id, text, comment_id=None, is_private_reply=False, automation_name=None, delay=0, quick_replies=None, buttons=None):
+def queue_ig_message(recipient_id, text, comment_id=None, is_private_reply=False, automation_name=None, delay=0, quick_replies=None, buttons=None, from_comment=False):
     queue = load_ig_messages_queue()
     queue.append({
         "recipient_id": recipient_id,
@@ -2051,10 +2051,11 @@ def queue_ig_message(recipient_id, text, comment_id=None, is_private_reply=False
         "queued_at": time.time(),
         "delay": delay,
         "quick_replies": quick_replies,
-        "buttons": buttons
+        "buttons": buttons,
+        "from_comment": from_comment
     })
     save_ig_messages_queue(queue)
-    print(f"[Queue] Queued message to {recipient_id}: {text[:30]}...", flush=True)
+    print(f"[Queue] Queued message to {recipient_id}: {text[:30]}... (from_comment={from_comment})", flush=True)
 
 def perform_ig_dm_send_with_buttons(user_id, text, quick_replies_list, tag=None) -> tuple[bool, str]:
     if not IG_USER_ID:
@@ -2438,8 +2439,11 @@ def ig_queue_worker():
                     continue
 
             # Rule 4: 24-hour standard messaging window + tags compliance
+            # Note: DMs triggered from comment private replies (from_comment=True) are allowed
+            # because the private reply itself opens the 24h messaging window.
             tag_to_use = None
-            if not is_private_reply and recipient_id:
+            from_comment = msg_task.get("from_comment", False)
+            if not is_private_reply and not from_comment and recipient_id:
                 last_interaction_time = get_last_user_interaction_time(recipient_id)
                 now = time.time()
                 is_outside_24h = last_interaction_time is None or (now - last_interaction_time > 86400)
@@ -2450,7 +2454,7 @@ def ig_queue_worker():
                             tag_to_use = "HUMAN_AGENT"
                             print(f"[IG Worker] User {recipient_id} outside 24h but inside 7-day manual window. Applying HUMAN_AGENT tag.", flush=True)
                         else:
-                            print(f"[IG Worker] 🚫 User {recipient_id} outside 7-day manual window. Skipping manual reply.", flush=True)
+                            print(f"[IG Worker] User {recipient_id} outside 7-day manual window. Skipping manual reply.", flush=True)
                             queue.pop(0)
                             save_ig_messages_queue(queue)
                             logs.append({
@@ -2463,7 +2467,7 @@ def ig_queue_worker():
                             save_ig_messages_log(logs)
                             continue
                     else:
-                        print(f"[IG Worker] 🚫 User {recipient_id} outside 24h automated window. Skipping automated reply.", flush=True)
+                        print(f"[IG Worker] User {recipient_id} outside 24h automated window. Skipping automated reply.", flush=True)
                         queue.pop(0)
                         save_ig_messages_queue(queue)
                         logs.append({
@@ -2475,6 +2479,8 @@ def ig_queue_worker():
                         })
                         save_ig_messages_log(logs)
                         continue
+            elif from_comment and not is_private_reply:
+                print(f"[IG Worker] from_comment=True for {recipient_id}, bypassing 24h window check (private reply opened window).", flush=True)
 
             # Human-like delay: 1-4 seconds
             rand_delay = random.uniform(1.0, 4.0)
@@ -2653,11 +2659,15 @@ def send_ig_automation_dm(auto, user_id, username="", comment_id=None, delay=0):
             save_ig_conv_state(conv_state)
             
         elif (auto.get("button_enabled") and (auto.get("buttons") or auto.get("button_label"))) or has_tap_step_0:
+            # from_comment=True tells the queue worker to skip Rule 4 (24h window check)
+            # because the private reply already opens the messaging window
+            triggered_from_comment = bool(comment_id)
             if comment_id:
                 # Send an initial private reply to open the 24-hour window
                 private_reply_text = f"Thanks for your comment! Check the options below:"
                 send_ig_private_reply(comment_id, private_reply_text, recipient_id=user_id, automation_name=auto.get("name"), delay=delay)
-                button_delay = delay + 2
+                # Give the private reply enough time to be processed and open the window
+                button_delay = delay + 5
             else:
                 button_delay = delay
 
@@ -2669,8 +2679,10 @@ def send_ig_automation_dm(auto, user_id, username="", comment_id=None, delay=0):
                     is_private_reply=False,
                     automation_name=auto.get("name"),
                     delay=button_delay,
-                    buttons=auto.get("buttons")
+                    buttons=auto.get("buttons"),
+                    from_comment=triggered_from_comment
                 )
+                print(f"  [Button DM] Queued multi-button DM to {user_id} (from_comment={triggered_from_comment})", flush=True)
             else:
                 if has_tap_step_0:
                     btn_label = steps[0]["button_label"][:20]
@@ -2687,10 +2699,11 @@ def send_ig_automation_dm(auto, user_id, username="", comment_id=None, delay=0):
                     is_private_reply=False,
                     automation_name=auto.get("name"),
                     delay=button_delay,
-                    quick_replies=quick_replies
+                    quick_replies=quick_replies,
+                    from_comment=triggered_from_comment
                 )
+                print(f"  [QuickReply DM] Queued DM to {user_id} with button payload={btn_payload} (from_comment={triggered_from_comment})", flush=True)
             increment_ig_automation_counter_by_id(auto.get("id"), "dms_sent")
-            print(f"  [QuickReply DM] Queued initial DM to {user_id} with button payload={btn_payload}", flush=True)
             
         else:
             # Normal initial DM
@@ -2759,7 +2772,8 @@ def run_ig_automations(trigger_type, text, media_id="", comment_id="", user_id="
                     if comment_id:
                         # Send a simple private reply first to open the 24-hour window
                         send_ig_private_reply(comment_id, "Check your DMs to get the link! 📩", recipient_id=user_id, automation_name=auto.get("name"), delay=delay)
-                        button_delay = delay + 2
+                        # Give the private reply enough time to be processed and open the window
+                        button_delay = delay + 5
                     else:
                         button_delay = delay
 
@@ -2775,7 +2789,8 @@ def run_ig_automations(trigger_type, text, media_id="", comment_id="", user_id="
                         is_private_reply=False,
                         automation_name=auto.get("name"),
                         delay=button_delay,
-                        quick_replies=quick_replies
+                        quick_replies=quick_replies,
+                        from_comment=bool(comment_id)
                     )
                     increment_ig_automation_counter(auto["name"], "dms_sent")
                     
