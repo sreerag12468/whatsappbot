@@ -1113,19 +1113,21 @@
           <a href="#" onclick="alert('Excluded keywords can be added inside main configuration tab.'); return false;" style="font-size:12px; color:#7c5cff; text-decoration:none; margin-top:8px; display:inline-block;">Add excluded keywords?</a>
         </div>
 
-        <div class="sp-switch-row" style="margin-top: 20px;">
-          <div class="sp-switch-label">
-            Auto-Reply to comments on the post
-            <small>Instantly post a public comment reply to users who comment</small>
+        <div id="igwz-public-reply-field" style="margin-top: 20px;">
+          <div class="sp-switch-row" style="margin-top: 0;">
+            <div class="sp-switch-label">
+              Auto-Reply to comments on the post
+              <small>Instantly post a public comment reply to users who comment</small>
+            </div>
+            <label class="sp-switch">
+              <input type="checkbox" id="sp-public-reply-toggle" onchange="toggleSpPublicReplyField()">
+              <span class="sp-slider"></span>
+            </label>
           </div>
-          <label class="sp-switch">
-            <input type="checkbox" id="sp-public-reply-toggle" onchange="toggleSpPublicReplyField()">
-            <span class="sp-slider"></span>
-          </label>
-        </div>
-        <div id="sp-public-reply-field-reveal" style="display:none; margin-bottom: 16px;">
-          <label class="igwz-label">Public Comment Reply Text</label>
-          <input type="text" id="igwz-public-reply" class="igwz-input" placeholder="Thanks @{username}! Check your DMs 📥">
+          <div id="sp-public-reply-field-reveal" style="display:none; margin-bottom: 16px;">
+            <label class="igwz-label">Public Comment Reply Text</label>
+            <input type="text" id="igwz-public-reply" class="igwz-input" placeholder="Thanks @{username}! Check your DMs 📥">
+          </div>
         </div>
       </div>
 
@@ -2263,9 +2265,12 @@ async function igwzLoadPosts() {
 
 function igwzSelectTrigger(trigger) {
   igwzData.trigger = trigger;
-  document.getElementById('igwz-trigger-any').classList.toggle('selected', trigger === 'all');
-  document.getElementById('igwz-trigger-kw').classList.toggle('selected', trigger === 'keyword');
-  document.getElementById('igwz-kw-section').style.display = trigger === 'keyword' ? 'block' : 'none';
+  const anyBtn = document.getElementById('sp-trigger-any-btn');
+  const kwBtn = document.getElementById('sp-trigger-kw-btn');
+  const kwSection = document.getElementById('sp-kw-section');
+  if (anyBtn) anyBtn.classList.toggle('active', trigger === 'all');
+  if (kwBtn) kwBtn.classList.toggle('active', trigger === 'keyword');
+  if (kwSection) kwSection.style.display = trigger === 'keyword' ? 'block' : 'none';
 }
 
 function igwzAddKw() {
@@ -2306,11 +2311,10 @@ function igwzUpdatePreview() {
   if (!body) return;
 
   const dmMsg = document.getElementById('igwz-dm') ? document.getElementById('igwz-dm').value.trim() : igwzData.dmMessage;
-  const followPrompt = document.getElementById('igwz-follow-prompt') ? document.getElementById('igwz-follow-prompt').value.trim() : igwzData.followPrompt;
-  const emailPrompt = document.getElementById('igwz-email-prompt') ? document.getElementById('igwz-email-prompt').value.trim() : igwzData.emailPrompt;
-  const linkUrl = document.getElementById('igwz-link') ? document.getElementById('igwz-link').value.trim() : igwzData.linkUrl;
-  const askFollow = document.getElementById('igwz-ask-follow') ? document.getElementById('igwz-ask-follow').checked : igwzData.askFollow;
-  const collectEmail = document.getElementById('igwz-email') ? document.getElementById('igwz-email').checked : igwzData.emailCapture;
+  const followPrompt = document.getElementById('sp-follow-prompt') ? document.getElementById('sp-follow-prompt').value.trim() : igwzData.followPrompt;
+  const emailPrompt = document.getElementById('sp-email-prompt') ? document.getElementById('sp-email-prompt').value.trim() : igwzData.emailPrompt;
+  const askFollow = document.getElementById('sp-ask-follow') ? document.getElementById('sp-ask-follow').checked : igwzData.askFollow;
+  const collectEmail = document.getElementById('sp-email') ? document.getElementById('sp-email').checked : igwzData.emailCapture;
   const publicReply = document.getElementById('igwz-public-reply') ? document.getElementById('igwz-public-reply').value.trim() : igwzData.publicReply;
 
   // Public comment preview
