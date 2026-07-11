@@ -2174,18 +2174,68 @@ def send_ig_flow_step(user_id, flow_key, step_id, username=""):
         }
         save_ig_conv_state(conv_state)
 
-def perform_ig_private_reply_send(comment_id, message, quick_replies=None) -> tuple[bool, str]:
+def perform_ig_private_reply_send(comment_id, message, quick_replies=None, buttons=None, auto_id=None) -> tuple[bool, str]:
     if not IG_USER_ID:
         return False, "IG_USER_ID not set"
     if not daily_cap_ok():
         return False, "Daily DM cap reached"
     try:
-        payload = {
-            "recipient": {"comment_id": comment_id},
-            "message": {"text": message}
-        }
-        if quick_replies:
-            payload["message"]["quick_replies"] = quick_replies
+        if buttons:
+            has_url = any(is_valid_url(btn.get("url")) for btn in buttons)
+            if has_url:
+                meta_buttons = []
+                for idx, btn in enumerate(buttons[:3]):
+                    url = btn.get("url") or ""
+                    title = btn.get("title") or "Open Link"
+                    if is_valid_url(url):
+                        meta_buttons.append({
+                            "type": "web_url",
+                            "url": url,
+                            "title": title[:20]
+                        })
+                    else:
+                        meta_buttons.append({
+                            "type": "postback",
+                            "title": title[:20],
+                            "payload": f"IGBTN_MULTI_{auto_id}_{idx}"
+                        })
+                payload = {
+                    "recipient": {"comment_id": comment_id},
+                    "message": {
+                        "attachment": {
+                            "type": "template",
+                            "payload": {
+                                "template_type": "button",
+                                "text": message,
+                                "buttons": meta_buttons
+                            }
+                        }
+                    }
+                }
+            else:
+                meta_quick_replies = []
+                for idx, btn in enumerate(buttons):
+                    title = btn.get("title") or f"Button {idx+1}"
+                    meta_quick_replies.append({
+                        "content_type": "text",
+                        "title": title[:20],
+                        "payload": f"IGBTN_MULTI_{auto_id}_{idx}"
+                    })
+                payload = {
+                    "recipient": {"comment_id": comment_id},
+                    "message": {
+                        "text": message,
+                        "quick_replies": meta_quick_replies
+                    }
+                }
+        else:
+            payload = {
+                "recipient": {"comment_id": comment_id},
+                "message": {"text": message}
+            }
+            if quick_replies:
+                payload["message"]["quick_replies"] = quick_replies
+
         resp = requests.post(
             f"{GRAPH_URL}/me/messages",
             params={"access_token": PAGE_ACCESS_TOKEN},
@@ -2351,7 +2401,7 @@ def perform_ig_button_template_send(recipient_id, follow_up_message, link_url, l
     except Exception as e:
         return False, str(e)
 
-def send_ig_private_reply(comment_id, message, recipient_id=None, automation_name=None, delay=0, run_id=None, quick_replies=None):
+def send_ig_private_reply(comment_id, message, recipient_id=None, automation_name=None, delay=0, run_id=None, quick_replies=None, buttons=None, auto_id=None):
     queue_ig_message(
         recipient_id=recipient_id,
         text=message,
@@ -2360,7 +2410,9 @@ def send_ig_private_reply(comment_id, message, recipient_id=None, automation_nam
         automation_name=automation_name,
         delay=delay,
         run_id=run_id,
-        quick_replies=quick_replies
+        quick_replies=quick_replies,
+        buttons=buttons,
+        auto_id=auto_id
     )
 
 def send_ig_dm(user_id, message, automation_name=None, delay=0, run_id=None):
@@ -2541,7 +2593,13 @@ def ig_queue_worker():
             text = msg_task.get("text")
             auto_id = msg_task.get("auto_id")
             if is_private_reply and comment_id:
-                success, error_message = perform_ig_private_reply_send(comment_id, text, quick_replies=msg_task.get("quick_replies"))
+                success, error_message = perform_ig_private_reply_send(
+                    comment_id, 
+                    text, 
+                    quick_replies=msg_task.get("quick_replies"),
+                    buttons=msg_task.get("buttons"),
+                    auto_id=auto_id
+                )
             elif msg_task.get("buttons"):
                 success, error_message = perform_ig_buttons_send(recipient_id, text, msg_task["buttons"], tag=tag_to_use, auto_id=auto_id)
             elif msg_task.get("quick_replies"):
@@ -2704,7 +2762,29 @@ def send_ig_automation_dm(auto, user_id, username="", comment_id=None, delay=0, 
         
         if triggered_from_comment:
             if has_buttons or has_email or has_followups:
-                # Determine button label
+                # If we have direct buttons configured (no email capture), we send the button template directly as the private reply!
+                if has_buttons and not has_email:
+                    configured_buttons = auto.get("buttons")
+                    if not configured_buttons and (auto.get("button_label") or auto.get("link_url")):
+                        configured_buttons = [{
+                            "title": auto.get("button_label") or "Open Link",
+                            "url": auto.get("link_url") or ""
+                        }]
+                    if configured_buttons:
+                        send_ig_private_reply(
+                            comment_id, 
+                            dm_body, 
+                            recipient_id=user_id, 
+                            automation_name=auto.get("name"), 
+                            delay=delay, 
+                            run_id=run_id,
+                            buttons=configured_buttons,
+                            auto_id=auto.get("id")
+                        )
+                        increment_ig_automation_counter_by_id(auto.get("id"), "dms_sent")
+                        return True
+
+                # Determine button label (fallback to teaser)
                 btn_title = "Send details 📩"
                 if auto.get("buttons"):
                     btn_title = auto.get("buttons")[0].get("title") or "Send details 📩"
