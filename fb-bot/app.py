@@ -5795,6 +5795,8 @@ def ig_debug_logs():
             except Exception as se:
                 sub_info = {"error": str(se)}
                 
+        g_vars = {k: str(v) for k, v in globals().items() if k.startswith("PAGE_") or k.startswith("IG_") or k == "DB_FILE"}
+                
         return jsonify({
             "ok": True,
             "queue_len": len(queue),
@@ -5804,6 +5806,7 @@ def ig_debug_logs():
             "interactions": list(interactions.items())[-20:],
             "debug_events": ig_debug_events[-50:],
             "subscribed_apps": sub_info,
+            "global_vars": g_vars,
             "page_id": PAGE_ID,
             "ig_user_id": IG_USER_ID
         })
