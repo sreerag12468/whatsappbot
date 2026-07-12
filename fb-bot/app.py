@@ -123,6 +123,7 @@ def init_sqlite_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
         reply TEXT,
+        reply_texts TEXT,
         action TEXT,
         dm_message TEXT,
         trigger_type TEXT,
@@ -137,7 +138,6 @@ def init_sqlite_db():
         follow_up_message TEXT,
         ask_follow INTEGER,
         follow_prompt TEXT,
-        email_capture INTEGER,
         email_capture INTEGER,
         email_prompt TEXT,
         total_runs INTEGER DEFAULT 0,
@@ -867,6 +867,23 @@ def save_ig_keywords(data):
         finally:
             conn.close()
 
+def _migrate_reply_texts_column():
+    """One-time migration: add reply_texts column if it doesn't exist yet (existing DBs)."""
+    conn = get_db_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(ig_automations)")
+        cols = [row["name"] for row in cursor.fetchall()]
+        if "reply_texts" not in cols:
+            cursor.execute("ALTER TABLE ig_automations ADD COLUMN reply_texts TEXT")
+            conn.commit()
+            print("[DB Migration] Added reply_texts column to ig_automations")
+    except Exception as e:
+        print(f"[DB Migration] reply_texts migration error: {e}")
+    finally:
+        conn.close()
+
+
 def load_ig_automations():
     conn = get_db_conn()
     try:
@@ -875,9 +892,17 @@ def load_ig_automations():
         rows = cursor.fetchall()
         rules = []
         for r in rows:
+            # ── Backward-compat: migrate old single `reply` string → reply_texts array ──
+            raw_reply_texts = r["reply_texts"] if "reply_texts" in r.keys() else None
+            if raw_reply_texts:
+                reply_texts = [t for t in json.loads(raw_reply_texts) if t and t.strip()]
+            else:
+                old_reply = r["reply"] or ""
+                reply_texts = [old_reply] if old_reply.strip() else []
             rules.append({
                 "name": r["name"],
-                "reply": r["reply"],
+                "reply": reply_texts[0] if reply_texts else (r["reply"] or ""),
+                "reply_texts": reply_texts,
                 "action": r["action"],
                 "dm_message": r["dm_message"],
                 "trigger_type": r["trigger_type"],
@@ -920,11 +945,17 @@ def save_ig_automations(data):
             cursor = conn.cursor()
             cursor.execute("DELETE FROM ig_automations")
             for rule in data:
+                # Build reply_texts: filter empty/blank strings only
+                raw_texts = rule.get("reply_texts") or []
+                reply_texts = [t.strip() for t in raw_texts if t and t.strip()]
+                # Keep legacy reply field in sync with first variation
+                legacy_reply = reply_texts[0] if reply_texts else (rule.get("reply") or "")
                 cursor.execute(
-                    "INSERT INTO ig_automations (name, reply, action, dm_message, trigger_type, scope, post_ids, thumbnail, keyword_type, keywords, active, delay_seconds, link_url, follow_up_message, ask_follow, follow_prompt, email_capture, email_prompt, total_runs, dms_sent, replies_sent, follow_gate_conversions, button_enabled, button_label, button_follow_up_message, link_button_label, follow_up_steps, buttons) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO ig_automations (name, reply, reply_texts, action, dm_message, trigger_type, scope, post_ids, thumbnail, keyword_type, keywords, active, delay_seconds, link_url, follow_up_message, ask_follow, follow_prompt, email_capture, email_prompt, total_runs, dms_sent, replies_sent, follow_gate_conversions, button_enabled, button_label, button_follow_up_message, link_button_label, follow_up_steps, buttons) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         rule.get("name"),
-                        rule.get("reply"),
+                        legacy_reply,
+                        json.dumps(reply_texts),
                         rule.get("action"),
                         rule.get("dm_message"),
                         rule.get("trigger_type"),
@@ -958,6 +989,7 @@ def save_ig_automations(data):
             print(f"Error saving IG automations: {e}")
         finally:
             conn.close()
+
 
 def increment_ig_automation_counter(name, column_name):
     with db_lock:
@@ -2967,13 +2999,31 @@ def run_ig_automations(trigger_type, text, media_id="", comment_id="", user_id="
         # Unique run_id per trigger match event
         run_id = f"{auto.get('id')}:{user_id}:{int(time.time()*1000)}"
 
-        if action in ("comment", "both") and auto.get("reply") and comment_id:
-            reply_to_ig_comment(comment_id, personalize_ig_message(auto["reply"], username))
-            increment_ig_automation_counter(auto["name"], "replies_sent")
+        if action in ("comment", "both") and comment_id:
+            # Pick one reply variation at random (fall back to legacy single reply)
+            reply_texts = [t for t in (auto.get("reply_texts") or []) if t and t.strip()]
+            if not reply_texts and auto.get("reply"):
+                reply_texts = [auto["reply"]]
+            if reply_texts:
+                chosen_reply = personalize_ig_message(random.choice(reply_texts), username)
+                auto_name_snap = auto.get("name", "")
+                # Fire after a randomized 30-120s delay in a background thread
+                # to mimic human response timing and reduce Instagram spam detection
+                def _delayed_comment_reply(cid=comment_id, msg=chosen_reply, aname=auto_name_snap):
+                    try:
+                        delay_secs = random.randint(30, 120)
+                        print(f"  [IG Comment Reply] Waiting {delay_secs}s before replying (anti-spam)", flush=True)
+                        time.sleep(delay_secs)
+                        reply_to_ig_comment(cid, msg)
+                        increment_ig_automation_counter(aname, "replies_sent")
+                    except Exception as _e:
+                        print(f"  [IG Comment Reply error] {_e}", flush=True)
+                threading.Thread(target=_delayed_comment_reply, daemon=True).start()
 
         send_ig_automation_dm(auto, user_id, username, comment_id, delay, run_id=run_id)
         return True
     return False
+
 
 
 def save_last_tester(user_id, username=None):
@@ -4454,10 +4504,33 @@ INSTAGRAM_HTML = """
         
         <div id="public-reply-section" style="display:none">
           <div class="input-group">
-            <label>Public Comment Reply Text</label>
-            <textarea id="auto-reply" rows="2" placeholder="Thanks @{username}! Check your DMs 📩"></textarea>
+            <label style="font-weight:700">Public Comment Reply Variations</label>
+            <div style="font-size:11px;color:#6b7280;margin-bottom:10px">One variation is picked at random each time (with a 30–120s delay) to avoid Instagram spam detection. At least 1 required.</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#db2777;margin-bottom:3px;display:block">Reply Variation 1 *</label>
+                <textarea id="auto-reply-1" rows="2" placeholder="Thanks @{username}! Check your DMs 📩"></textarea>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:3px;display:block">Reply Variation 2 <span style='font-weight:400'>(optional)</span></label>
+                <textarea id="auto-reply-2" rows="2" placeholder="Hey @{username}! We've sent you a DM ✉️"></textarea>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:3px;display:block">Reply Variation 3 <span style='font-weight:400'>(optional)</span></label>
+                <textarea id="auto-reply-3" rows="2" placeholder="@{username} Check your inbox! 🎉"></textarea>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:3px;display:block">Reply Variation 4 <span style='font-weight:400'>(optional)</span></label>
+                <textarea id="auto-reply-4" rows="2" placeholder=""></textarea>
+              </div>
+              <div>
+                <label style="font-size:11px;font-weight:600;color:#6b7280;margin-bottom:3px;display:block">Reply Variation 5 <span style='font-weight:400'>(optional)</span></label>
+                <textarea id="auto-reply-5" rows="2" placeholder=""></textarea>
+              </div>
+            </div>
           </div>
         </div>
+
 
         <div class="section-label">SuperProfile Conversions Gate</div>
         <div class="check-row">
@@ -4666,9 +4739,11 @@ function updatePreview(){
   const trigger = selectedTrigger || 'comment';
   const hasComment = ['comment','live'].includes(trigger);
   
-  if(hasComment && document.getElementById('auto-reply').value.trim()){
+  const _previewReply = [1,2,3,4,5].map(i=>{const el=document.getElementById('auto-reply-'+i);return el?el.value.trim():'';}).find(t=>t.length>0)||'';
+  const _previewCount = [1,2,3,4,5].filter(i=>{const el=document.getElementById('auto-reply-'+i);return el&&el.value.trim().length>0;}).length;
+  if(hasComment && _previewReply){
     document.getElementById('preview-comment-block').style.display = 'block';
-    document.getElementById('p-comm-text').textContent = document.getElementById('auto-reply').value;
+    document.getElementById('p-comm-text').textContent = _previewReply + (_previewCount > 1 ? ' (+ ' + (_previewCount-1) + ' more variations)' : '');
   } else {
     document.getElementById('preview-comment-block').style.display = 'none';
   }
@@ -4721,7 +4796,7 @@ function openModal(d,idx){
   spWizardButtons = [];
   document.querySelectorAll('.picker-card').forEach(c=>c.classList.remove('selected'));
   document.querySelectorAll('.option-card').forEach(c=>c.classList.remove('selected'));
-  ['auto-name','auto-reply','auto-dm','follow-prompt','email-prompt'].forEach(id=>document.getElementById(id).value='');
+  ['auto-name','auto-reply-1','auto-reply-2','auto-reply-3','auto-reply-4','auto-reply-5','auto-dm','follow-prompt','email-prompt'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('auto-dm-type').value='text_button';
   document.getElementById('auto-delay').value='0';
   document.getElementById('ask-follow').checked=false; document.getElementById('email-capture').checked=false;
@@ -4738,7 +4813,12 @@ function openModal(d,idx){
     if(selectedKwType==='specific') document.getElementById('kw-input-area').style.display='block';
     renderTags();
     document.getElementById('auto-name').value=d.name||'';
-    document.getElementById('auto-reply').value=d.reply||'';
+    // Populate reply variation fields (support new reply_texts array and legacy single reply)
+    const _replyTexts = (d.reply_texts && d.reply_texts.length) ? d.reply_texts : (d.reply ? [d.reply] : []);
+    for(let _i=1;_i<=5;_i++){
+      const el=document.getElementById('auto-reply-'+_i);
+      if(el) el.value = _replyTexts[_i-1] || '';
+    }
     document.getElementById('auto-dm').value=d.dm_message||'';
     document.getElementById('auto-delay').value=d.delay_seconds||0;
     document.getElementById('ask-follow').checked=!!d.ask_follow;
@@ -4900,19 +4980,25 @@ async function nextStep(){
   }
   else if(currentStep===4){
     const name=document.getElementById('auto-name').value.trim();
-    const reply=document.getElementById('auto-reply').value.trim();
+    // Collect 5 reply variation fields, filter blanks
+    const _replyTextsRaw=[1,2,3,4,5].map(i=>{const el=document.getElementById('auto-reply-'+i);return el?el.value.trim():'';});
+    const replyTexts=_replyTextsRaw.filter(t=>t.length>0);
+    const hasComment=['comment','live'].includes(selectedTrigger);
+    // Validate: at least 1 required when action involves comment reply
+    if(hasComment&&replyTexts.length===0)return alert('Please enter at least one Reply Variation (Variation 1 is required)');
+    const reply=replyTexts[0]||'';
     const dm=document.getElementById('auto-dm').value.trim();
     const posts=Object.values(selectedPostIds);
-    const hasComment = ['comment','live'].includes(selectedTrigger);
     
-    const dmType = document.getElementById('auto-dm-type').value;
-    const isBtn = (dmType === 'text_button');
-    const validBtns = spWizardButtons.filter(b => b.title && b.title.trim());
+    const dmType=document.getElementById('auto-dm-type').value;
+    const isBtn=(dmType==='text_button');
+    const validBtns=spWizardButtons.filter(b=>b.title&&b.title.trim());
     
     const payload={
       name,
-      reply: hasComment ? reply : '',
-      action: hasComment ? (reply ? 'both' : 'dm') : 'dm',
+      reply: hasComment?reply:'',
+      reply_texts: hasComment?replyTexts:[],
+      action: hasComment?(reply?'both':'dm'):'dm',
       dm_message: dm,
       trigger_type: selectedTrigger,
       scope: ['comment','live'].includes(selectedTrigger)?selectedScope:'all',
@@ -6295,6 +6381,7 @@ def temp_sql_query():
 
 if __name__ == "__main__":
     import threading
+    _migrate_reply_texts_column()  # Add reply_texts column to existing DBs
     threading.Thread(target=ig_queue_worker, daemon=True).start()
     threading.Thread(target=ig_scheduler_worker, daemon=True).start()
     threading.Thread(target=ig_token_health_worker, daemon=True).start()
