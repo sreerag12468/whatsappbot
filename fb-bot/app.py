@@ -1780,14 +1780,14 @@ def save_payments(payments):
 def extract_price_from_text(text):
     if not text:
         return None
-    match = re.search(r'(?:₹|Rs\.?|INR)\s*([0-9]{1,3}(?:,?[0-9]{3})*)', text, re.IGNORECASE)
+    match = re.search(r'(?:₹|Rs\.?|INR)\s*([0-9]+(?:,[0-9]+)*(?:\.[0-9]+)?)', text, re.IGNORECASE)
     if match:
         price_str = match.group(1).replace(',', '')
         try:
             return float(price_str)
         except ValueError:
             pass
-    match = re.search(r'(?:വില|price|amount|cost)\s*(?::|-)?\s*(?:₹|Rs\.?|INR)?\s*([0-9]{1,3}(?:,?[0-9]{3})*)', text, re.IGNORECASE)
+    match = re.search(r'(?:വില|price|amount|cost)\s*(?::|-)?\s*(?:₹|Rs\.?|INR)?\s*([0-9]+(?:,[0-9]+)*(?:\.[0-9]+)?)', text, re.IGNORECASE)
     if match:
         price_str = match.group(1).replace(',', '')
         try:
