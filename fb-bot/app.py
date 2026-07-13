@@ -1756,6 +1756,346 @@ def upload_wa_media(phone_id, token, base64_data, mime_type="image/jpeg"):
         raise err
 
 
+import datetime
+
+PAYMENTS_FILE = get_flow_path("payments.json")
+
+def load_payments():
+    if not os.path.exists(PAYMENTS_FILE):
+        return []
+    try:
+        with open(PAYMENTS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return []
+
+def save_payments(payments):
+    try:
+        with open(PAYMENTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(payments, f, indent=2, ensure_ascii=False)
+        return True
+    except:
+        return False
+
+def extract_price_from_text(text):
+    if not text:
+        return None
+    match = re.search(r'(?:₹|Rs\.?|INR)\s*([0-9]{1,3}(?:,?[0-9]{3})*)', text, re.IGNORECASE)
+    if match:
+        price_str = match.group(1).replace(',', '')
+        try:
+            return float(price_str)
+        except ValueError:
+            pass
+    match = re.search(r'(?:വില|price|amount|cost)\s*(?::|-)?\s*(?:₹|Rs\.?|INR)?\s*([0-9]{1,3}(?:,?[0-9]{3})*)', text, re.IGNORECASE)
+    if match:
+        price_str = match.group(1).replace(',', '')
+        try:
+            return float(price_str)
+        except ValueError:
+            pass
+    return None
+
+def verify_razorpay_signature(raw_body, signature, webhook_secret):
+    expected_signature = hmac.new(
+        webhook_secret.encode('utf-8'),
+        raw_body,
+        hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected_signature, signature)
+
+def create_razorpay_qr(price_in_paise, reference_id, phone, expiry_time):
+    url = "https://api.razorpay.com/v1/payments/qr_codes"
+    auth = ("rzp_live_TCyx0YL01vD8oo", "FjoHDvfov8OaQajJZEF8eqDC")
+    payload = {
+        "type": "upi_qr",
+        "name": "Order Payment",
+        "usage": "single_use",
+        "fixed_amount": True,
+        "payment_amount": price_in_paise,
+        "close_by": expiry_time,
+        "notes": {
+            "reference_id": reference_id,
+            "phone": phone
+        }
+    }
+    r = requests.post(url, auth=auth, json=payload, timeout=15)
+    r.raise_for_status()
+    return r.json()
+
+def create_razorpay_payment_link(price_in_paise, reference_id, phone, expiry_time):
+    url = "https://api.razorpay.com/v1/payment_links"
+    auth = ("rzp_live_TCyx0YL01vD8oo", "FjoHDvfov8OaQajJZEF8eqDC")
+    payload = {
+        "amount": price_in_paise,
+        "currency": "INR",
+        "accept_partial": False,
+        "expire_by": expiry_time,
+        "reference_id": reference_id,
+        "description": "Order Payment",
+        "customer": {
+            "contact": phone
+        },
+        "notify": {
+            "sms": False,
+            "email": False
+        },
+        "notes": {
+            "reference_id": reference_id,
+            "phone": phone
+        }
+    }
+    r = requests.post(url, auth=auth, json=payload, timeout=15)
+    r.raise_for_status()
+    return r.json()
+
+def cancel_razorpay_payment_link(link_id):
+    url = f"https://api.razorpay.com/v1/payment_links/{link_id}/cancel"
+    auth = ("rzp_live_TCyx0YL01vD8oo", "FjoHDvfov8OaQajJZEF8eqDC")
+    try:
+        r = requests.post(url, auth=auth, timeout=10)
+        r.raise_for_status()
+    except Exception as e:
+        print(f"Failed to cancel payment link {link_id}: {e}", flush=True)
+
+def close_razorpay_qr_code(qr_id):
+    url = f"https://api.razorpay.com/v1/payments/qr_codes/{qr_id}/close"
+    auth = ("rzp_live_TCyx0YL01vD8oo", "FjoHDvfov8OaQajJZEF8eqDC")
+    try:
+        r = requests.post(url, auth=auth, timeout=10)
+        r.raise_for_status()
+    except Exception as e:
+        print(f"Failed to close QR code {qr_id}: {e}", flush=True)
+
+def send_official_wa_image_url(to_number, image_url, caption=None):
+    token = os.getenv("PAGE_ACCESS_TOKEN")
+    phone_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+    if not token or not phone_id:
+        return
+    url = f"https://graph.facebook.com/v19.0/{phone_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    clean_to = re.sub(r"\D", "", to_number)
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": clean_to,
+        "type": "image",
+        "image": {
+            "link": image_url
+        }
+    }
+    if caption:
+        payload["image"]["caption"] = caption
+    r = requests.post(url, headers=headers, json=payload, timeout=15)
+    r.raise_for_status()
+
+def extract_field_python(answers, keys):
+    for key in keys:
+        for ans_key, ans_val in answers.items():
+            if key in ans_key.lower():
+                return ans_val
+    return None
+
+def create_shopify_order_python(user_state, sender_wa_id, sender_name):
+    answers = user_state.get("answers", {})
+    name = extract_field_python(answers, ['name', 'customer', 'full name', 'buyer']) or sender_name or 'WhatsApp Customer'
+    phone = extract_field_python(answers, ['phone', 'mobile', 'contact', 'number'])
+    address = extract_field_python(answers, ['address', 'shipping', 'location', 'delivery'])
+    variant_id = extract_field_python(answers, ['variant', 'product', 'id', 'item_id', 'variant_id'])
+    quantity_str = extract_field_python(answers, ['quantity', 'qty', 'count', 'number of items']) or '1'
+    price_str = extract_field_python(answers, ['price', 'amount', 'cost', 'rate'])
+    
+    if not price_str:
+        kw_pattern = user_state.get("matchedKeywordPattern")
+        if kw_pattern:
+            try:
+                kw_path = os.getenv("KEYWORDS_PATH")
+                if not kw_path:
+                    for p in ["/data/keywords.json", "keywords.json", "../keywords.json"]:
+                        if os.path.exists(p):
+                            kw_path = p
+                            break
+                    if not kw_path:
+                        kw_path = os.path.join(BASE_DIR, "keywords.json")
+                if os.path.exists(kw_path):
+                    with open(kw_path, "r", encoding="utf-8") as f:
+                        kw_map = json.load(f)
+                    rule_data = kw_map.get(kw_pattern)
+                    if isinstance(rule_data, dict):
+                        text_content = rule_data.get("text", "")
+                    elif isinstance(rule_data, str):
+                        text_content = rule_data
+                    else:
+                        text_content = ""
+                    ext_price = extract_price_from_text(text_content)
+                    if ext_price:
+                        price_str = str(ext_price)
+            except Exception as e:
+                print(f"Error loading price from keywords: {e}", flush=True)
+
+    missing_fields = []
+    if not phone:
+        missing_fields.append('phone')
+    if not address:
+        missing_fields.append('address')
+    if not variant_id:
+        kw_pattern = user_state.get("matchedKeywordPattern")
+        if kw_pattern:
+            try:
+                kw_path = os.getenv("KEYWORDS_PATH")
+                if not kw_path:
+                    for p in ["/data/keywords.json", "keywords.json", "../keywords.json"]:
+                        if os.path.exists(p):
+                            kw_path = p
+                            break
+                    if not kw_path:
+                        kw_path = os.path.join(BASE_DIR, "keywords.json")
+                if os.path.exists(kw_path):
+                    with open(kw_path, "r", encoding="utf-8") as f:
+                        kw_map = json.load(f)
+                    rule = kw_map.get(kw_pattern)
+                    if isinstance(rule, dict):
+                        variant_id = rule.get("variant_id") or rule.get("product_id")
+            except:
+                pass
+        if not variant_id:
+            missing_fields.append('product variant ID')
+
+    if missing_fields:
+        err_msg = f"Shopify order failed: Missing required fields ({', '.join(missing_fields)})."
+        print(f"[Shopify Error] {err_msg}", flush=True)
+        try:
+            log_payload = {
+                "timestamp": datetime.datetime.now().isoformat(),
+                "error": err_msg,
+                "answers": answers,
+                "sender_wa_id": sender_wa_id,
+                "sender_name": sender_name
+            }
+            with open(os.path.join(BASE_DIR, "failed_orders.log"), "a", encoding="utf-8") as f:
+                f.write(json.dumps(log_payload, indent=2) + "\n\n")
+        except:
+            pass
+        try:
+            send_official_wa_message(
+                to_number="916282444918",
+                text=f"⚠️ *Shopify Order Creation Failed!*\n\n*Error*: {err_msg}\n*Customer*: {sender_name} ({sender_wa_id})\n*Answers*:\n{json.dumps(answers, indent=2)}"
+            )
+        except Exception as e:
+            print(f"Failed to alert admin: {e}", flush=True)
+        return
+
+    try:
+        quantity = int(quantity_str)
+    except:
+        quantity = 1
+    
+    try:
+        price = float(price_str) if price_str else None
+    except:
+        price = None
+
+    financial_status = "pending" if user_state.get("paymentMethod") == "cod" else "paid"
+    
+    shopify_order = {
+        "order": {
+            "line_items": [
+                {
+                    "variant_id": int(variant_id),
+                    "quantity": quantity
+                }
+            ],
+            "customer": {
+                "first_name": name,
+                "phone": phone
+            },
+            "shipping_address": {
+                "first_name": name,
+                "address1": address,
+                "phone": phone
+            },
+            "financial_status": financial_status,
+            "phone": phone
+        }
+    }
+    if price is not None:
+        shopify_order["order"]["line_items"][0]["price"] = price
+
+    store_domain = os.getenv("SHOPIFY_STORE_DOMAIN")
+    admin_token = os.getenv("SHOPIFY_ADMIN_TOKEN")
+
+    if not store_domain or not admin_token or "xxxxxx" in admin_token:
+        err_msg = "Shopify credentials missing or unconfigured in .env file."
+        print(f"[Shopify Error] {err_msg}", flush=True)
+        try:
+            log_payload = {
+                "timestamp": datetime.datetime.now().isoformat(),
+                "error": err_msg,
+                "payload": shopify_order
+            }
+            with open(os.path.join(BASE_DIR, "failed_orders.log"), "a", encoding="utf-8") as f:
+                f.write(json.dumps(log_payload, indent=2) + "\n\n")
+        except:
+            pass
+        try:
+            send_official_wa_message(
+                to_number="916282444918",
+                text=f"⚠️ *Shopify Order Creation Failed!*\n\n*Error*: {err_msg}\n*Customer*: {sender_name} ({sender_wa_id})"
+            )
+        except:
+            pass
+        return
+
+    clean_domain = store_domain.replace("https://", "").replace("http://", "").strip()
+    if not clean_domain.endswith(".myshopify.com") and "." not in clean_domain:
+        clean_domain = f"{clean_domain}.myshopify.com"
+
+    shopify_url = f"https://{clean_domain}/admin/api/2026-01/orders.json"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": admin_token
+    }
+
+    try:
+        r = requests.post(shopify_url, headers=headers, json=shopify_order, timeout=15)
+        data = r.json()
+        if r.status_code in (200, 201) and "order" in data:
+            order_number = data["order"].get("order_number") or data["order"].get("name") or data["order"].get("id")
+            print(f"Shopify Order created successfully: #{order_number}", flush=True)
+            confirmation_msg = (
+                f"🎉 *Order Confirmed!*\n\n"
+                f"Thank you for ordering, *{name}*! Your order has been placed successfully.\n"
+                f"🛍️ *Shopify Order ID*: #{order_number}\n"
+                f"We will update you once your order is dispatched."
+            )
+            send_official_wa_message(sender_wa_id, text=confirmation_msg)
+        else:
+            err_details = json.dumps(data.get("errors")) if "errors" in data else json.dumps(data)
+            raise Exception(f"Shopify API responded with status {r.status_code}: {err_details}")
+    except Exception as err:
+        print(f"[Shopify Error] Shopify API request failed: {err}", flush=True)
+        try:
+            log_payload = {
+                "timestamp": datetime.datetime.now().isoformat(),
+                "error": str(err),
+                "payload": shopify_order
+            }
+            with open(os.path.join(BASE_DIR, "failed_orders.log"), "a", encoding="utf-8") as f:
+                f.write(json.dumps(log_payload, indent=2) + "\n\n")
+        except:
+            pass
+        try:
+            send_official_wa_message(
+                to_number="916282444918",
+                text=f"⚠️ *Shopify Order Creation Failed!*\n\n*Error*: {err}\n*Customer*: {sender_name} ({sender_wa_id})"
+            )
+        except:
+            pass
+
+
 def send_official_wa_message(to_number, text=None, image_base64=None, voice_base64=None):
     token = os.getenv("PAGE_ACCESS_TOKEN")
     phone_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
@@ -1984,44 +2324,157 @@ def handle_official_wa_message(msg, contact):
                 send_official_wa_message(sender_wa_id, text=questions[next_idx].get("prompt"))
             else:
                 payment_method = user_state.get("paymentMethod")
-                template = order_flow_config.get("cod_confirmation_template" if payment_method == "cod" else "online_confirmation_template")
                 
-                final_text = template.replace("{payment_link}", order_flow_config.get("payment_link", ""))
-                for key, val in user_state.get("answers", {}).items():
-                    final_text = final_text.replace(f"{{{key}}}", val)
+                if payment_method == "online":
+                    # Extract price from matched keyword trigger
+                    price = None
+                    kw_pattern = user_state.get("matchedKeywordPattern")
+                    if kw_pattern:
+                        try:
+                            kw_path = os.getenv("KEYWORDS_PATH")
+                            if not kw_path:
+                                for p in ["/data/keywords.json", "keywords.json", "../keywords.json"]:
+                                    if os.path.exists(p):
+                                        kw_path = p
+                                        break
+                                if not kw_path:
+                                    kw_path = os.path.join(BASE_DIR, "keywords.json")
+                            if os.path.exists(kw_path):
+                                with open(kw_path, "r", encoding="utf-8") as f:
+                                    kw_map = json.load(f)
+                                rule_data = kw_map.get(kw_pattern)
+                                if isinstance(rule_data, dict):
+                                    text_content = rule_data.get("text", "")
+                                elif isinstance(rule_data, str):
+                                    text_content = rule_data
+                                else:
+                                    text_content = ""
+                                price = extract_price_from_text(text_content)
+                        except Exception as e:
+                            print(f"Error loading price for online payment: {e}", flush=True)
                     
-                time.sleep(1.0)
-                send_official_wa_message(sender_wa_id, text=final_text)
-                print(f"Order flow completed for {sender_name} ({payment_method}).", flush=True)
+                    if not price:
+                        price = 7999.0  # Safe fallback to standard printer price
 
-                # Send order notification to owner 916282444918
-                try:
-                    answers_text = "\n".join([f"*{k}*: {v}" for k, v in user_state.get("answers", {}).items()])
-                    owner_notification = (
-                        f"📦 *New Order Received!*\n\n"
-                        f"*Customer*: {sender_name} ({sender_wa_id})\n"
-                        f"*Payment Mode*: {'Cash on Delivery (COD)' if payment_method == 'cod' else 'Online Payment'}\n\n"
-                        f"*Details*:\n{answers_text}"
-                    )
-                    send_official_wa_message("916282444918", text=owner_notification)
-                    print("Owner notification sent to 916282444918.", flush=True)
-                except Exception as owner_err:
-                    print(f"Failed to send order notification to owner: {owner_err}", flush=True)
+                    price_in_paise = int(price * 100)
+                    reference_id = f"ref_{int(time.time())}_{sender_wa_id.split('@')[0]}"
+                    expiry_minutes = 15
+                    expires_at = int(time.time()) + (expiry_minutes * 60)
+                    
+                    try:
+                        # Call Razorpay QR API and Payment Link API
+                        qr_data = create_razorpay_qr(price_in_paise, reference_id, sender_wa_id, expires_at)
+                        pl_data = create_razorpay_payment_link(price_in_paise, reference_id, sender_wa_id, expires_at)
+                        
+                        qr_id = qr_data.get("id")
+                        qr_url = qr_data.get("image_url")
+                        pl_id = pl_data.get("id")
+                        pl_url = pl_data.get("short_url")
+                        
+                        # Store pending payment info
+                        payments = load_payments()
+                        payments.append({
+                            "qr_id": qr_id,
+                            "payment_link_id": pl_id,
+                            "reference_id": reference_id,
+                            "phone": sender_wa_id,
+                            "amount": price,
+                            "expires_at": expires_at,
+                            "status": "pending",
+                            "answers": user_state.get("answers"),
+                            "sender_name": sender_name
+                        })
+                        save_payments(payments)
+                        
+                        # Send QR scan-to-pay image
+                        send_official_wa_image_url(
+                            to_number=sender_wa_id,
+                            image_url=qr_url,
+                            caption="Scan to Pay using any UPI app (Google Pay, PhonePe, Paytm, etc.)"
+                        )
+                        time.sleep(1.0)
+                        
+                        # Send fallback payment link text
+                        link_message = (
+                            f"💳 *Online Payment Required*\n\n"
+                            f"Please complete your payment of *₹{price:.2f}* using the link below:\n\n"
+                            f"🔗 {pl_url}\n\n"
+                            f"⏳ _Note: Both the QR code and payment link will expire in 15 minutes._"
+                        )
+                        send_official_wa_message(sender_wa_id, text=link_message)
+                        
+                        # Send notification to owner 916282444918
+                        try:
+                            answers_text = "\n".join([f"*{k}*: {v}" for k, v in user_state.get("answers", {}).items()])
+                            owner_notification = (
+                                f"⏳ *New Pending Online Order!*\n\n"
+                                f"*Customer*: {sender_name} ({sender_wa_id})\n"
+                                f"*Amount*: ₹{price:.2f}\n"
+                                f"*Reference ID*: {reference_id}\n\n"
+                                f"*Details*:\n{answers_text}"
+                            )
+                            send_official_wa_message("916282444918", text=owner_notification)
+                        except:
+                            pass
+                            
+                        # Clean up conv state
+                        if sender_wa_id in conv_state:
+                            del conv_state[sender_wa_id]
+                            save_conv_state(conv_state)
+                            
+                    except Exception as rz_err:
+                        print(f"Razorpay APIs failed: {rz_err}", flush=True)
+                        send_official_wa_message(
+                            sender_wa_id,
+                            text="⚠️ Sorry, we had trouble generating your online payment link. Please try again or select Cash on Delivery."
+                        )
+                else:
+                    # Cash on Delivery Flow
+                    template = order_flow_config.get("cod_confirmation_template")
+                    final_text = template if template else "Thanks {name}! Your Cash on Delivery order is confirmed."
+                    for key, val in user_state.get("answers", {}).items():
+                        final_text = final_text.replace(f"{{{key}}}", val)
+                        
+                    time.sleep(1.0)
+                    send_official_wa_message(sender_wa_id, text=final_text)
+                    print(f"Order flow completed for {sender_name} (COD).", flush=True)
 
-                orders = load_orders()
-                orders.append({
-                    "jid": sender_wa_id,
-                    "name": sender_name,
-                    "paymentMethod": payment_method,
-                    "answers": user_state.get("answers"),
-                    "matchedKeywordPattern": user_state.get("matchedKeywordPattern"),
-                    "completedAt": datetime.datetime.now().isoformat()
-                })
-                save_orders(orders)
-                
-                if sender_wa_id in conv_state:
-                    del conv_state[sender_wa_id]
-                    save_conv_state(conv_state)
+                    # Trigger Shopify order creation automatically for COD orders
+                    try:
+                        create_shopify_order_python(user_state, sender_wa_id, sender_name)
+                    except Exception as shop_err:
+                        print(f"[Shopify Error] COD auto-creation failed: {shop_err}", flush=True)
+
+                    # Send order notification to owner 916282444918
+                    try:
+                        answers_text = "\n".join([f"*{k}*: {v}" for k, v in user_state.get("answers", {}).items()])
+                        owner_notification = (
+                            f"📦 *New Order Received!*\n\n"
+                            f"*Customer*: {sender_name} ({sender_wa_id})\n"
+                            f"*Payment Mode*: Cash on Delivery (COD)\n\n"
+                            f"*Details*:\n{answers_text}"
+                        )
+                        send_official_wa_message("916282444918", text=owner_notification)
+                        print("Owner notification sent to 916282444918.", flush=True)
+                    except Exception as owner_err:
+                        print(f"Failed to send order notification to owner: {owner_err}", flush=True)
+
+                    orders = load_orders()
+                    orders.append({
+                        "jid": sender_wa_id,
+                        "name": sender_name,
+                        "paymentMethod": payment_method,
+                        "answers": user_state.get("answers"),
+                        "matchedKeywordPattern": user_state.get("matchedKeywordPattern"),
+                        "shopifyProcessed": True,
+                        "shopifyProcessedAt": datetime.datetime.now().isoformat(),
+                        "completedAt": datetime.datetime.now().isoformat()
+                    })
+                    save_orders(orders)
+                    
+                    if sender_wa_id in conv_state:
+                        del conv_state[sender_wa_id]
+                        save_conv_state(conv_state)
             return
     
     # Load keywords
@@ -6184,6 +6637,102 @@ def ig_debug_logs():
         })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)})
+
+
+@app.route("/razorpay/webhook", methods=["POST"])
+def razorpay_webhook():
+    signature = request.headers.get("X-Razorpay-Signature")
+    if not signature:
+        print("[Razorpay Webhook] Missing X-Razorpay-Signature header", flush=True)
+        return "Missing signature", 400
+        
+    raw_body = request.data
+    webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET") or "FjoHDvfov8OaQajJZEF8eqDC"
+    
+    if not verify_razorpay_signature(raw_body, signature, webhook_secret):
+        print("[Razorpay Webhook] Signature verification failed!", flush=True)
+        return "Invalid signature", 400
+        
+    data = request.json
+    event = data.get("event")
+    print(f"[Razorpay Webhook] Received verified event: {event}", flush=True)
+    
+    reference_id = None
+    qr_id = None
+    payment_link_id = None
+    
+    if event == "payment_link.paid":
+        entity = data.get("payload", {}).get("payment_link", {}).get("entity", {})
+        reference_id = entity.get("reference_id")
+        payment_link_id = entity.get("id")
+    elif event == "qr_code.credited":
+        entity = data.get("payload", {}).get("qr_code", {}).get("entity", {})
+        qr_id = entity.get("id")
+        reference_id = entity.get("notes", {}).get("reference_id")
+        
+    if not reference_id:
+        print("[Razorpay Webhook] No reference_id found in payload", flush=True)
+        return "No reference_id found in event", 200
+        
+    # Look up pending payment by reference_id
+    payments = load_payments()
+    matched_payment = None
+    for p in payments:
+        if p.get("reference_id") == reference_id:
+            matched_payment = p
+            break
+            
+    if not matched_payment:
+        print(f"[Razorpay Webhook] No pending payment found for reference_id: {reference_id}", flush=True)
+        return "No pending payment found", 200
+        
+    # Check if already processed
+    if matched_payment.get("status") == "paid":
+        print(f"[Razorpay Webhook] Payment {reference_id} already processed.", flush=True)
+        return "Already processed", 200
+        
+    # Mark as paid
+    matched_payment["status"] = "paid"
+    matched_payment["paid_at"] = datetime.datetime.now().isoformat()
+    save_payments(payments)
+    
+    # Close/cancel the other payment method to prevent double payment
+    if event == "qr_code.credited" and matched_payment.get("payment_link_id"):
+        cancel_razorpay_payment_link(matched_payment["payment_link_id"])
+    elif event == "payment_link.paid" and matched_payment.get("qr_id"):
+        close_razorpay_qr_code(matched_payment["qr_id"])
+        
+    # Create Shopify Order
+    phone = matched_payment.get("phone")
+    sender_name = matched_payment.get("sender_name", "WhatsApp User")
+    
+    try:
+        user_state = {
+            "answers": matched_payment.get("answers", {}),
+            "paymentMethod": "online",
+            "matchedKeywordPattern": matched_payment.get("matchedKeywordPattern")
+        }
+        create_shopify_order_python(user_state, phone, sender_name)
+    except Exception as e:
+        print(f"[Razorpay Webhook] Error creating Shopify order: {e}", flush=True)
+        
+    # Append to orders database
+    try:
+        orders = load_orders()
+        orders.append({
+            "jid": phone,
+            "name": sender_name,
+            "paymentMethod": "online",
+            "answers": matched_payment.get("answers"),
+            "shopifyProcessed": True,
+            "shopifyProcessedAt": datetime.datetime.now().isoformat(),
+            "completedAt": datetime.datetime.now().isoformat()
+        })
+        save_orders(orders)
+    except Exception as e:
+        print(f"[Razorpay Webhook] Error saving order to database: {e}", flush=True)
+        
+    return "OK", 200
 
 
 @app.route("/webhook", methods=["GET"])
