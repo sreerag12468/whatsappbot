@@ -836,6 +836,9 @@ def handle_comment(value):
 
 _ig_media_cache      = []
 _ig_media_cache_time = 0
+
+_ig_stories_cache      = []
+_ig_stories_cache_time = 0
 _ig_replied_set      = set()
 
 
@@ -1606,6 +1609,51 @@ def fetch_ig_media(force=False):
             continue
             
     raise last_error
+
+
+def fetch_ig_stories(force=False):
+    """
+    Pull the currently-active Instagram stories (Graph API only exposes stories
+    that haven't expired yet — they disappear from this list after ~24h).
+    Used to populate the "Specific Story" picker in the automation builder.
+    """
+    global _ig_stories_cache, _ig_stories_cache_time
+    global PAGE_ACCESS_TOKEN
+    if not force and _ig_stories_cache and (time.time() - _ig_stories_cache_time) < POSTS_CACHE_TTL:
+        return _ig_stories_cache
+    if not IG_USER_ID:
+        raise Exception("IG_USER_ID is not configured")
+
+    try:
+        resp = requests.get(
+            f"{GRAPH_URL}/{IG_USER_ID}/stories",
+            params={
+                "fields": "id,media_type,media_url,thumbnail_url,timestamp,permalink",
+                "access_token": PAGE_ACCESS_TOKEN,
+            },
+            timeout=10,
+        )
+        data = resp.json()
+        if resp.status_code != 200 or "error" in data:
+            err_msg = data.get("error", {}).get("message", f"HTTP {resp.status_code}")
+            raise Exception(err_msg)
+
+        stories = []
+        for item in data.get("data", []):
+            mtype = item.get("media_type", "IMAGE").lower()
+            stories.append({
+                "id":         item["id"],
+                "message":    "Story",
+                "created":    item.get("timestamp", "")[:10],
+                "thumbnail":  item.get("thumbnail_url") or item.get("media_url", ""),
+                "media_type": mtype,
+            })
+        _ig_stories_cache      = stories
+        _ig_stories_cache_time = time.time()
+        return stories
+    except Exception as e:
+        print(f"[fetch_ig_stories] Failed: {e}")
+        raise
 
 
 def subscribe_instagram():
@@ -2976,7 +3024,7 @@ def run_ig_automations(trigger_type, text, media_id="", comment_id="", user_id="
             continue
         if auto.get("trigger_type", "comment") != trigger_type:
             continue
-        if trigger_type in ("comment", "live") and not _ig_scope_match(auto, media_id):
+        if trigger_type in ("comment", "live", "story") and not _ig_scope_match(auto, media_id):
             continue
         if not _ig_keyword_match(auto, text):
             continue
@@ -3420,7 +3468,7 @@ def handle_ig_messaging(event):
     if message.get("story_mention"):
         is_story_mention = True
 
-    if is_story_mention:
+    if is_story_mention and not is_echo:
         print(f"[IG STORY MENTION] from={sender_id}", flush=True)
         dedup_key = f"ig:story_mention:{sender_id}:{message.get('mid')}"
         if ig_already_replied(dedup_key):
@@ -3430,12 +3478,13 @@ def handle_ig_messaging(event):
             ig_mark_replied(dedup_key)
         return
 
-    if reply_to.get("story"):
-        print(f"[IG STORY REPLY] from={sender_id} text={text}", flush=True)
-        dedup_key = f"ig:story:{sender_id}:{text}"
+    if reply_to.get("story") and not is_echo:
+        story_id = reply_to.get("story", {}).get("id", "")
+        print(f"[IG STORY REPLY] from={sender_id} story_id={story_id} text={text}", flush=True)
+        dedup_key = f"ig:story:{sender_id}:{story_id}:{text}"
         if ig_already_replied(dedup_key):
             return
-        if run_ig_automations("story", text, user_id=sender_id):
+        if run_ig_automations("story", text, media_id=story_id, user_id=sender_id):
             bump_ig_stat("story_replies")
             ig_mark_replied(dedup_key)
         return
@@ -4462,14 +4511,14 @@ INSTAGRAM_HTML = """
         </div>
         
         <div id="post-select-section" style="display:none">
-          <div class="section-label">Select Media Scope</div>
+          <div class="section-label" id="scope-section-label">Select Media Scope</div>
           <div class="option-grid" style="margin-bottom:14px">
-            <div class="option-card" id="scope-all" onclick="selectScope('all')"><div class="oc-icon">📢</div><div class="oc-label">All Posts & Reels</div></div>
-            <div class="option-card" id="scope-specific" onclick="selectScope('specific')"><div class="oc-icon">📌</div><div class="oc-label">Specific Media</div></div>
+            <div class="option-card" id="scope-all" onclick="selectScope('all')"><div class="oc-icon">📢</div><div class="oc-label" id="scope-all-label">All Posts & Reels</div></div>
+            <div class="option-card" id="scope-specific" onclick="selectScope('specific')"><div class="oc-icon">📌</div><div class="oc-label" id="scope-specific-label">Specific Media</div></div>
           </div>
           
           <div id="media-grid-container" style="display:none">
-            <div class="section-label">Select Instagram Media</div>
+            <div class="section-label" id="media-grid-label">Select Instagram Media</div>
             <div id="posts-grid-modal" class="posts-grid"><div style="text-align:center;padding:20px;color:#6b7280">Loading...</div></div>
             <div id="post-select-count" style="font-size:12px;color:#6b7280;font-weight:600;margin-bottom:14px"></div>
           </div>
@@ -4846,6 +4895,7 @@ function openModal(d,idx){
 function editAuto(i,d){postsLoaded=false;openModal(d,i);}
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open');}
 function selectTrigger(t){
+  if(selectedTrigger!==t){ postsLoaded=false; selectedPostIds={}; selectedScope=null; }
   selectedTrigger=t;
   document.querySelectorAll('.picker-card').forEach(c=>c.classList.remove('selected'));
   const card=document.getElementById('trigger-'+t);
@@ -4888,8 +4938,13 @@ function showStep(n){
   }
   
   if(n===2){
-    if(selectedTrigger==='comment'){
+    if(selectedTrigger==='comment'||selectedTrigger==='story'){
       document.getElementById('post-select-section').style.display='block';
+      const isStory = selectedTrigger==='story';
+      document.getElementById('scope-section-label').textContent = isStory ? 'Select Story Scope' : 'Select Media Scope';
+      document.getElementById('scope-all-label').textContent = isStory ? 'All Stories' : 'All Posts & Reels';
+      document.getElementById('scope-specific-label').textContent = isStory ? 'Specific Story' : 'Specific Media';
+      document.getElementById('media-grid-label').textContent = isStory ? 'Select the Story' : 'Select Instagram Media';
       if(selectedScope==='specific'){
         document.getElementById('media-grid-container').style.display='block';
       } else {
@@ -4910,8 +4965,9 @@ function showStep(n){
 }
 async function loadPostsGrid(){
   const grid=document.getElementById('posts-grid-modal'); grid.innerHTML='Loading...';
+  const isStory = selectedTrigger==='story';
   try {
-    const r=await fetch('/instagram/ui/fetch-media');
+    const r=await fetch(isStory ? '/instagram/ui/fetch-stories' : '/instagram/ui/fetch-media');
     const d=await r.json();
     postsLoaded=true;
     grid.innerHTML='';
@@ -4921,7 +4977,7 @@ async function loadPostsGrid(){
     }
     const posts = d.posts || [];
     if (posts.length === 0) {
-      grid.innerHTML = '<div style="color:#6b7280;padding:20px;text-align:center;font-size:13px">No Instagram media found.</div>';
+      grid.innerHTML = `<div style="color:#6b7280;padding:20px;text-align:center;font-size:13px">${isStory ? 'No active stories right now — post a story first, then pick it here.' : 'No Instagram media found.'}</div>`;
       return;
     }
     posts.forEach(post=>{
@@ -4946,6 +5002,12 @@ async function nextStep(){
       if(!selectedScope)return alert('Please select media scope');
       if(selectedScope==='specific'&&!Object.keys(selectedPostIds).length){
         return alert('Please select at least one post/reel');
+      }
+    }
+    if(selectedTrigger==='story'){
+      if(!selectedScope)return alert('Please select story scope');
+      if(selectedScope==='specific'&&!Object.keys(selectedPostIds).length){
+        return alert('Please select the story');
       }
     }
     if(!selectedKwType)return alert('Please choose a trigger match condition');
@@ -5001,7 +5063,7 @@ async function nextStep(){
       action: hasComment?(reply?'both':'dm'):'dm',
       dm_message: dm,
       trigger_type: selectedTrigger,
-      scope: ['comment','live'].includes(selectedTrigger)?selectedScope:'all',
+      scope: ['comment','live','story'].includes(selectedTrigger)?selectedScope:'all',
       post_ids: Object.keys(selectedPostIds),
       thumbnail: posts.length?posts[0].thumbnail||'':'',
       keyword_type: selectedKwType,
@@ -5187,6 +5249,16 @@ def ig_fetch_media_api():
         return jsonify({"posts": media})
     except Exception as e:
         return jsonify({"error": str(e), "posts": []})
+
+@app.route("/instagram/ui/fetch-stories")
+def ig_fetch_stories_api():
+    force = request.args.get("refresh") == "1"
+    try:
+        stories = fetch_ig_stories(force=force)
+        return jsonify({"posts": stories})
+    except Exception as e:
+        return jsonify({"error": str(e), "posts": []})
+
 
 @app.route("/instagram/ui/automations", methods=["GET"])
 def ig_list_automations():
