@@ -1067,7 +1067,7 @@
 
         <!-- Post scope: only for comment type -->
         <div id="igwz-scope-section" class="igwz-field" style="display:none">
-          <label class="igwz-label">Which posts / reels?</label>
+          <label class="igwz-label" id="igwz-scope-label-title">Which posts / reels?</label>
           <div class="igwz-scope-grid">
             <button class="igwz-scope-btn selected" id="igwz-scope-all" onclick="igwzSelectScope('all')">&#x1F4E2; All Posts &amp; Reels</button>
             <button class="igwz-scope-btn" id="igwz-scope-specific" onclick="igwzSelectScope('specific')">&#x1F4CC; Specific Posts</button>
@@ -2060,7 +2060,8 @@ function openEditIgRuleModal(idx) {
   
   const count = igwzData.post_ids.length;
   const countEl = document.getElementById('igwz-post-count');
-  if (countEl) countEl.textContent = count > 0 ? `${count} post${count>1?'s':''} selected` : '';
+  const isStory = (igwzData.type === 'story');
+  if (countEl) countEl.textContent = count > 0 ? `${count} ${isStory ? 'story' : 'post'}${count>1 ? (isStory ? 'ies' : 's') : ''} selected` : '';
   
   igFollowUpSteps = rule.follow_up_steps ? JSON.parse(JSON.stringify(rule.follow_up_steps)) : [];
   
@@ -2202,8 +2203,12 @@ function igwzGoToStep(n) {
   nextBtn.textContent = n === 4 ? 'Save Rule' : 'Next →';
   // step-specific setup
   if (n === 2) {
-    const isComment = (igwzData.type === 'comment' || igwzData.type === 'live');
-    document.getElementById('igwz-scope-section').style.display = isComment ? 'block' : 'none';
+    const isCommentOrStory = (igwzData.type === 'comment' || igwzData.type === 'live' || igwzData.type === 'story');
+    document.getElementById('igwz-scope-section').style.display = isCommentOrStory ? 'block' : 'none';
+    const isStory = (igwzData.type === 'story');
+    document.getElementById('igwz-scope-label-title').textContent = isStory ? 'Which stories?' : 'Which posts / reels?';
+    document.getElementById('igwz-scope-all').innerHTML = isStory ? '&#x1F4E2; All Stories' : '&#x1F4E2; All Posts &amp; Reels';
+    document.getElementById('igwz-scope-specific').innerHTML = isStory ? '&#x1F4CC; Specific Story' : '&#x1F4CC; Specific Posts';
   }
   if (n === 3) {
     const hasPublicReply = (igwzData.type === 'comment' || igwzData.type === 'live');
@@ -2215,6 +2220,12 @@ function igwzGoToStep(n) {
 }
 
 function igwzSelectType(type) {
+  if (igwzData.type !== type) {
+    igwzPostsLoaded = false;
+    igwzSelectedPostIds = {};
+    igwzData.post_ids = [];
+    igwzData.scope = 'all';
+  }
   igwzData.type = type;
   document.querySelectorAll('.igwz-type-card').forEach(c => c.classList.remove('selected'));
   const card = document.getElementById('igwz-type-' + type);
@@ -2243,9 +2254,10 @@ async function igwzSelectScope(scope) {
 
 async function igwzLoadPosts() {
   const grid = document.getElementById('igwz-post-grid');
-  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:#6b7280;font-size:13px">Loading posts from @radikikk...</div>';
+  const isStory = (igwzData.type === 'story');
+  grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:20px;color:#6b7280;font-size:13px">Loading ${isStory ? 'stories' : 'posts'} from @radikikk...</div>`;
   try {
-    const res = await fetch('/fb/instagram/ui/fetch-media');
+    const res = await fetch(isStory ? '/fb/instagram/ui/fetch-stories' : '/fb/instagram/ui/fetch-media');
     const data = await res.json();
     igwzPostsLoaded = true;
     grid.innerHTML = '';
@@ -2255,7 +2267,7 @@ async function igwzLoadPosts() {
     }
     const posts = data.posts || [];
     if (posts.length === 0) {
-      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:#6b7280;font-size:13px">No Instagram posts found.</div>';
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:20px;color:#6b7280;font-size:13px">${isStory ? 'No active stories right now — post a story first, then pick it here.' : 'No Instagram posts found.'}</div>`;
       return;
     }
     posts.forEach(post => {
@@ -2299,7 +2311,8 @@ async function igwzLoadPosts() {
         }
         igwzData.post_ids = Object.keys(igwzSelectedPostIds);
         const count = igwzData.post_ids.length;
-        document.getElementById('igwz-post-count').textContent = count > 0 ? `${count} post${count>1?'s':''} selected` : '';
+        const isStory = (igwzData.type === 'story');
+        document.getElementById('igwz-post-count').textContent = count > 0 ? `${count} ${isStory ? 'story' : 'post'}${count>1 ? (isStory ? 'ies' : 's') : ''} selected` : '';
       };
       grid.appendChild(card);
     });
@@ -2450,6 +2463,9 @@ async function igwzNext() {
     const name = document.getElementById('igwz-name').value.trim();
     if (!name) return alert('Please enter an automation name.');
     igwzData.name = name;
+    if (igwzData.scope === 'specific' && (!igwzData.post_ids || igwzData.post_ids.length === 0)) {
+      return alert(igwzData.type === 'story' ? 'Please select the story.' : 'Please select at least one post/reel.');
+    }
     if (igwzData.trigger === 'keyword' && igwzData.keywords.length === 0) return alert('Please add at least one keyword.');
     
     const replyToggle = document.getElementById('sp-public-reply-toggle').checked;
@@ -2515,9 +2531,10 @@ async function igwzNext() {
     const triggerEl = document.getElementById('sp-preview-trigger-text');
     const delayEl = document.getElementById('sp-preview-delay-text');
     
+    const isStory = (igwzData.type === 'story');
     if (igwzData.scope === 'specific') {
-      headerEl.textContent = 'comments on this specific post';
-      descEl.textContent = `${igwzData.post_ids.length} Selected post(s)`;
+      headerEl.textContent = isStory ? 'replies to this specific story' : 'comments on this specific post';
+      descEl.textContent = `${igwzData.post_ids.length} Selected ${isStory ? 'story' : 'post'}(s)`;
       if (igwzData.post_ids.length > 0 && thumbEl) {
         const firstId = igwzData.post_ids[0];
         const ruleIndex = igRules.findIndex(r => r.post_ids && r.post_ids.includes(firstId));
@@ -2536,8 +2553,8 @@ async function igwzNext() {
         }
       }
     } else {
-      headerEl.textContent = 'comments on your Post/Reel';
-      descEl.textContent = 'All Posts & Reels';
+      headerEl.textContent = isStory ? 'replies to your Story' : 'comments on your Post/Reel';
+      descEl.textContent = isStory ? 'All Stories' : 'All Posts & Reels';
       if (thumbEl) thumbEl.style.display = 'none';
     }
     
