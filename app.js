@@ -1772,7 +1772,7 @@ async function connectToWhatsApp() {
                     if (buttonReply) incomingText = buttonReply;
 
                     const lowerInput = incomingText.toLowerCase();
-                    if (lowerInput === 'cancel' || lowerInput === 'restart') {
+                    if (lowerInput === 'cancel' || lowerInput === 'restart' || lowerInput === 'order_cancel') {
                         delete convState[senderJid];
                         saveConvState(convState);
                         await sock.sendMessage(senderJid, { text: "No problem, flow cancelled. Message us again anytime!" });
@@ -1788,12 +1788,14 @@ async function connectToWhatsApp() {
                         const choiceText =
                             `How would you like to pay?\n\n` +
                             `*1* - ${orderFlowConfig.cod_label}\n` +
-                            `*2* - ${orderFlowConfig.online_label}\n\n` +
-                            `Just reply with 1 or 2.`;
+                            `*2* - ${orderFlowConfig.online_label}\n` +
+                            `*3* - Cancel\n\n` +
+                            `Just reply with 1, 2 or 3.`;
 
                         const buttons = [
                             { buttonId: 'order_cod', buttonText: { displayText: orderFlowConfig.cod_label }, type: 1 },
-                            { buttonId: 'order_online', buttonText: { displayText: orderFlowConfig.online_label }, type: 1 }
+                            { buttonId: 'order_online', buttonText: { displayText: orderFlowConfig.online_label }, type: 1 },
+                            { buttonId: 'order_cancel', buttonText: { displayText: 'Cancel' }, type: 1 }
                         ];
 
                         const buttonMessage = {
@@ -1816,6 +1818,14 @@ async function connectToWhatsApp() {
                         const lower = incomingText.toLowerCase();
                         const isCod = lower === '1' || lower === 'cod' || lower === 'order_cod' || lower.includes('cash');
                         const isOnline = lower === '2' || lower === 'online' || lower === 'order_online' || lower.includes('online');
+                        const isCancel = lower === '3' || lower === 'cancel' || lower === 'order_cancel';
+
+                        if (isCancel) {
+                            delete convState[senderJid];
+                            saveConvState(convState);
+                            await sock.sendMessage(senderJid, { text: "No problem, flow cancelled. Message us again anytime!" });
+                            continue;
+                        }
 
                         if (isCod || isOnline) {
                             userState.paymentMethod = isCod ? 'cod' : 'online';
@@ -1830,7 +1840,7 @@ async function connectToWhatsApp() {
                             await sock.sendMessage(senderJid, { text: firstQuestion.prompt });
                         } else {
                             await sock.sendMessage(senderJid, {
-                                text: `Sorry, I didn't get that. Please reply with *1* for ${orderFlowConfig.cod_label} or *2* for ${orderFlowConfig.online_label}.`
+                                text: `Sorry, I didn't get that. Please reply with *1* for ${orderFlowConfig.cod_label}, *2* for ${orderFlowConfig.online_label}, or *3* to cancel.`
                             });
                         }
                         continue;
