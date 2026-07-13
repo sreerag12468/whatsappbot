@@ -1807,6 +1807,13 @@ def verify_razorpay_signature(raw_body, signature, webhook_secret):
 def create_razorpay_qr(price_in_paise, reference_id, phone, expiry_time):
     url = "https://api.razorpay.com/v1/payments/qr_codes"
     auth = ("rzp_live_TCyx0YL01vD8oo", "FjoHDvfov8OaQajJZEF8eqDC")
+    
+    clean_phone = re.sub(r"\D", "", phone)
+    if len(clean_phone) >= 10:
+        clean_phone = clean_phone[-10:]
+    else:
+        clean_phone = "9999999999"
+        
     payload = {
         "type": "upi_qr",
         "name": "Order Payment",
@@ -1816,7 +1823,7 @@ def create_razorpay_qr(price_in_paise, reference_id, phone, expiry_time):
         "close_by": expiry_time,
         "notes": {
             "reference_id": reference_id,
-            "phone": phone
+            "phone": clean_phone
         }
     }
     r = requests.post(url, auth=auth, json=payload, timeout=15)
@@ -1826,6 +1833,13 @@ def create_razorpay_qr(price_in_paise, reference_id, phone, expiry_time):
 def create_razorpay_payment_link(price_in_paise, reference_id, phone, expiry_time):
     url = "https://api.razorpay.com/v1/payment_links"
     auth = ("rzp_live_TCyx0YL01vD8oo", "FjoHDvfov8OaQajJZEF8eqDC")
+    
+    clean_phone = re.sub(r"\D", "", phone)
+    if len(clean_phone) >= 10:
+        clean_phone = clean_phone[-10:]
+    else:
+        clean_phone = "9999999999"
+        
     payload = {
         "amount": price_in_paise,
         "currency": "INR",
@@ -1834,7 +1848,7 @@ def create_razorpay_payment_link(price_in_paise, reference_id, phone, expiry_tim
         "reference_id": reference_id,
         "description": "Order Payment",
         "customer": {
-            "contact": phone
+            "contact": clean_phone
         },
         "notify": {
             "sms": False,
@@ -1842,7 +1856,7 @@ def create_razorpay_payment_link(price_in_paise, reference_id, phone, expiry_tim
         },
         "notes": {
             "reference_id": reference_id,
-            "phone": phone
+            "phone": clean_phone
         }
     }
     r = requests.post(url, auth=auth, json=payload, timeout=15)
@@ -2358,7 +2372,7 @@ def handle_official_wa_message(msg, contact):
 
                     price_in_paise = int(price * 100)
                     reference_id = f"ref_{int(time.time())}_{sender_wa_id.split('@')[0]}"
-                    expiry_minutes = 15
+                    expiry_minutes = 20
                     expires_at = int(time.time()) + (expiry_minutes * 60)
                     
                     try:
@@ -2399,7 +2413,7 @@ def handle_official_wa_message(msg, contact):
                             f"💳 *Online Payment Required*\n\n"
                             f"Please complete your payment of *₹{price:.2f}* using the link below:\n\n"
                             f"🔗 {pl_url}\n\n"
-                            f"⏳ _Note: Both the QR code and payment link will expire in 15 minutes._"
+                            f"⏳ _Note: Both the QR code and payment link will expire in 20 minutes._"
                         )
                         send_official_wa_message(sender_wa_id, text=link_message)
                         
@@ -2424,6 +2438,14 @@ def handle_official_wa_message(msg, contact):
                             
                     except Exception as rz_err:
                         print(f"Razorpay APIs failed: {rz_err}", flush=True)
+                        error_details = ""
+                        if hasattr(rz_err, 'response') and rz_err.response is not None:
+                            error_details = f" - Status: {rz_err.response.status_code} - Response: {rz_err.response.text}"
+                        try:
+                            with open(os.path.join(BASE_DIR, "razorpay_error.log"), "a", encoding="utf-8") as f:
+                                f.write(f"{datetime.datetime.now().isoformat()} - Error: {str(rz_err)}{error_details}\n")
+                        except Exception as log_err:
+                            print(f"Failed to write error log: {log_err}", flush=True)
                         send_official_wa_message(
                             sender_wa_id,
                             text="⚠️ Sorry, we had trouble generating your online payment link. Please try again or select Cash on Delivery."
